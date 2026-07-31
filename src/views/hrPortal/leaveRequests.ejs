@@ -1,0 +1,54 @@
+<div class="topbar">
+  <div>
+    <h1>Leave Requests</h1>
+    <div class="subtitle">Log leave for your team.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>New request</h2></div>
+  <form method="POST" action="/hr/leave-requests">
+    <div class="form-row">
+      <div class="field">
+        <label for="employee_id">Employee</label>
+        <select id="employee_id" name="employee_id" required>
+          <option value="">Select…</option>
+          <% employees.forEach(e => { %>
+            <option value="<%= e.id %>"><%= e.email %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label for="start_date">Start date</label><input type="date" id="start_date" name="start_date" required /></div>
+      <div class="field"><label for="end_date">End date</label><input type="date" id="end_date" name="end_date" required /></div>
+    </div>
+    <div class="field">
+      <label for="reason">Reason (optional)</label>
+      <textarea id="reason" name="reason"></textarea>
+    </div>
+    <button class="btn btn-primary" type="submit">Submit</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>History</h2></div>
+  <% if (!leaveRequests.length) { %>
+    <div class="empty-state">No leave requests yet.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Employee</th><th>Dates</th><th>Reason</th><th>Status</th></tr></thead>
+      <tbody>
+        <% leaveRequests.forEach(l => { %>
+          <tr>
+            <td><%= employeesById[l.employee_id] || '—' %></td>
+            <td class="small"><%= l.start_date %> → <%= l.end_date %></td>
+            <td class="small muted"><%= l.reason || '—' %></td>
+            <td><span class="badge <%= l.status === 'approved' ? 'badge-success' : l.status === 'rejected' ? 'badge-danger' : 'badge-warn' %>"><%= l.status %></span></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>

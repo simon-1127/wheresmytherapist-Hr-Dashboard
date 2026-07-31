@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('../partials/head', { title: 'Something went wrong' }) %>
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card" style="text-align:center;">
+      <h1>Something went wrong</h1>
+      <p class="muted" style="margin: 10px 0 20px;"><%= typeof message !== 'undefined' ? message : 'An unexpected error occurred.' %></p>
+      <a class="btn btn-primary" href="/">Back to dashboard</a>
+    </div>
+  </div>
+</body>
+</html>

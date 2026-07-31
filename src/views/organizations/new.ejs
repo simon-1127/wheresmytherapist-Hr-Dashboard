@@ -1,0 +1,296 @@
+<div class="topbar">
+  <div>
+    <h1>Add Organization</h1>
+    <div class="subtitle">Onboard a new partner company, following the standard onboarding flow.</div>
+  </div>
+</div>
+
+<% if (typeof error !== 'undefined' && error) { %>
+  <div class="flash flash-error"><%= error %></div>
+<% } %>
+
+<form method="POST" action="/organizations">
+  <div class="card">
+    <div class="form-section">
+      <div class="form-section-eyebrow">Step 1</div>
+      <h3>Organization Registration</h3>
+
+      <div class="form-row">
+        <div class="field">
+          <label for="company_name">Company name</label>
+          <input type="text" id="company_name" name="company_name" required value="<%= values.company_name || '' %>" />
+        </div>
+        <div class="field">
+          <label for="website">Website</label>
+          <input type="url" id="website" name="website" placeholder="https://" value="<%= values.website || '' %>" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="industry">Industry</label>
+          <input type="text" id="industry" name="industry" value="<%= values.industry || '' %>" />
+        </div>
+        <div class="field">
+          <label for="employee_count">Employee count</label>
+          <input type="number" id="employee_count" name="employee_count" min="0" value="<%= values.employee_count || '' %>" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="locations">Locations</label>
+          <input type="text" id="locations" name="locations" placeholder="Mumbai, Bangalore" value="<%= values.locations || '' %>" />
+          <div class="field-hint">Comma-separated. Informational only — not used for routing.</div>
+        </div>
+        <div class="field">
+          <label for="size_category">Company size category</label>
+          <select id="size_category" name="size_category">
+            <option value="">Select…</option>
+            <option value="startup">Startup (1–50)</option>
+            <option value="sme">SME (51–500)</option>
+            <option value="enterprise">Enterprise (500+)</option>
+          </select>
+        </div>
+      </div>
+
+      <h3 style="margin-top: 22px; font-size: 14px;">Primary contact (HR/Welfare SPOC)</h3>
+      <div class="field-hint" style="margin-bottom: 12px;">Kept for your team's reference only — the org's own HR contact never sees this back. If you check "create portal access" below, this email becomes their login.</div>
+      <div class="form-row">
+        <div class="field">
+          <label for="spoc_name">Name</label>
+          <input type="text" id="spoc_name" name="spoc_name" />
+        </div>
+        <div class="field">
+          <label for="spoc_designation">Designation</label>
+          <input type="text" id="spoc_designation" name="spoc_designation" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="spoc_email">Email</label>
+          <input type="email" id="spoc_email" name="spoc_email" />
+        </div>
+        <div class="field">
+          <label for="spoc_phone">Phone number</label>
+          <input type="tel" id="spoc_phone" name="spoc_phone" />
+        </div>
+      </div>
+      <div class="check-item" style="margin-top: 6px;">
+        <input type="checkbox" id="create_hr_access" name="create_hr_access" checked />
+        <label for="create_hr_access" style="margin: 0; font-weight: 500;">Create HR portal access for this contact now</label>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-eyebrow">Step 2</div>
+      <h3>Mental Health Needs Assessment</h3>
+
+      <label>Primary reasons for implementing mental health support</label>
+      <div class="check-grid" style="margin-bottom: 18px;">
+        <% const goals = [['reduce_burnout','Reduce employee burnout'],['improve_wellbeing','Improve employee wellbeing'],['improve_retention','Improve retention'],['support_stress','Support workplace stress'],['confidential_counselling','Provide confidential counselling'],['improve_productivity','Improve productivity'],['crisis_support','Crisis support'],['other','Other']]; %>
+        <% goals.forEach(([val,label]) => { %>
+          <div class="check-item"><input type="checkbox" name="goals[]" value="<%= val %>" id="goal_<%= val %>" /><label for="goal_<%= val %>" style="margin:0; font-weight:400;"><%= label %></label></div>
+        <% }) %>
+      </div>
+
+      <label>Current workplace challenges (severity, 1–5)</label>
+      <div class="form-row" style="grid-template-columns: repeat(3, 1fr);">
+        <% const challenges = [['rating_work_stress','Work stress'],['rating_burnout','Burnout'],['rating_anxiety','Anxiety'],['rating_employee_engagement','Employee engagement'],['rating_sleep_issues','Sleep issues'],['rating_workplace_conflicts','Workplace conflicts']]; %>
+        <% challenges.forEach(([name,label]) => { %>
+          <div class="field">
+            <label for="<%= name %>"><%= label %></label>
+            <select id="<%= name %>" name="<%= name %>">
+              <option value="">—</option>
+              <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+            </select>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-eyebrow">Step 3</div>
+      <h3>Employee Coverage Setup</h3>
+      <div class="form-row">
+        <div class="field">
+          <label for="eligible_employees">Eligible employees</label>
+          <input type="number" id="eligible_employees" name="eligible_employees" min="0" />
+        </div>
+        <div class="field">
+          <label for="departments_covered">Departments covered</label>
+          <input type="text" id="departments_covered" name="departments_covered" placeholder="Engineering, Sales" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="locations_covered">Locations covered</label>
+          <input type="text" id="locations_covered" name="locations_covered" placeholder="Mumbai, Bangalore" />
+        </div>
+        <div class="field">
+          <label for="employee_access_model">Employee access</label>
+          <select id="employee_access_model" name="employee_access_model">
+            <option value="">Select…</option>
+            <option value="unlimited">Unlimited employee access</option>
+            <option value="fixed_sessions">Fixed number of sessions per employee</option>
+            <option value="pay_per_session">Pay-per-session model</option>
+          </select>
+          <div class="field-hint">Informational only — sessions aren't limited by tier for anyone right now.</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="session_cadence">Session preference</label>
+          <select id="session_cadence" name="session_cadence">
+            <option value="">Select…</option>
+            <option value="monthly_1">1 session / month</option>
+            <option value="quarterly_3">3 sessions / quarter</option>
+            <option value="yearly_6">6 sessions / year</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="session_cadence_custom">Custom (if selected above)</label>
+          <input type="text" id="session_cadence_custom" name="session_cadence_custom" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-eyebrow">Step 4</div>
+      <h3>Services Required</h3>
+      <div class="form-row" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div>
+          <label>Therapy &amp; Counselling</label>
+          <% [['individual','Individual therapy'],['couple','Couple counselling'],['stress','Stress counselling'],['anxiety_depression','Anxiety/depression support'],['trauma','Trauma support'],['career','Career counselling']].forEach(([val,label]) => { %>
+            <div class="check-item"><input type="checkbox" name="services_therapy[]" value="<%= val %>" id="st_<%= val %>" /><label for="st_<%= val %>" style="margin:0; font-weight:400;"><%= label %></label></div>
+          <% }) %>
+        </div>
+        <div>
+          <label>Workplace Wellness</label>
+          <% [['workshops','Mental health workshops'],['manager_training','Manager training'],['leadership','Leadership wellbeing sessions'],['stress_mgmt','Stress management programs'],['burnout_prevention','Burnout prevention programs']].forEach(([val,label]) => { %>
+            <div class="check-item"><input type="checkbox" name="services_wellness[]" value="<%= val %>" id="sw_<%= val %>" /><label for="sw_<%= val %>" style="margin:0; font-weight:400;"><%= label %></label></div>
+          <% }) %>
+        </div>
+        <div>
+          <label>Emergency Support</label>
+          <% [['crisis','Crisis counselling'],['priority','Priority appointments']].forEach(([val,label]) => { %>
+            <div class="check-item"><input type="checkbox" name="services_emergency[]" value="<%= val %>" id="se_<%= val %>" /><label for="se_<%= val %>" style="margin:0; font-weight:400;"><%= label %></label></div>
+          <% }) %>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-eyebrow">Step 5</div>
+      <h3>Platform Setup</h3>
+      <div class="form-row">
+        <div>
+          <label>Employee access method</label>
+          <% [['app','Where\'s My Therapist mobile app'],['web','Web platform'],['whatsapp','WhatsApp support'],['hr_referral','HR referral system']].forEach(([val,label]) => { %>
+            <div class="check-item"><input type="checkbox" name="access_methods[]" value="<%= val %>" id="am_<%= val %>" /><label for="am_<%= val %>" style="margin:0; font-weight:400;"><%= label %></label></div>
+          <% }) %>
+        </div>
+        <div class="field">
+          <label for="auth_method">Authentication</label>
+          <select id="auth_method" name="auth_method">
+            <option value="">Select…</option>
+            <option value="company_email">Company email verification</option>
+            <option value="employee_id">Employee ID verification</option>
+            <option value="open_link">Open access link</option>
+          </select>
+          <div class="field-hint">Employees are onboarded by company email regardless — this is recorded for reference.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-eyebrow">Step 6</div>
+      <h3>Confidentiality Agreement</h3>
+      <p class="muted small">"Where's My Therapist maintains complete confidentiality. Organisations receive only anonymous, aggregated reports. Individual employee therapy information is never shared."</p>
+      <div class="check-item">
+        <input type="checkbox" id="confidentiality_agreed" name="confidentiality_agreed" />
+        <label for="confidentiality_agreed" style="margin:0; font-weight:500;">Organization confirms agreement</label>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-eyebrow">Step 8</div>
+      <h3>Commercial Setup</h3>
+      <div class="form-row">
+        <div class="field">
+          <label for="plan">Plan selected</label>
+          <select id="plan" name="plan">
+            <option value="">Select…</option>
+            <option value="starter">Starter — basic counselling access</option>
+            <option value="growth">Growth — therapy sessions + workshops</option>
+            <option value="enterprise">Enterprise — complete EAP solution</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="subscription_tier_id">Employee app tier granted</label>
+          <select id="subscription_tier_id" name="subscription_tier_id">
+            <option value="HR-Onboarding" selected>HR-Onboarding (fullest access)</option>
+            <option value="growth">Growth</option>
+            <option value="starter">Starter</option>
+            <option value="free">Free</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="billing_address">Billing address</label>
+          <textarea id="billing_address" name="billing_address"></textarea>
+        </div>
+        <div class="field">
+          <label for="gst_number">GST details</label>
+          <input type="text" id="gst_number" name="gst_number" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="invoice_email">Invoice email</label>
+          <input type="email" id="invoice_email" name="invoice_email" />
+        </div>
+        <div class="field">
+          <label for="payment_terms">Payment terms</label>
+          <input type="text" id="payment_terms" name="payment_terms" placeholder="Net 30" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="contract_start">Contract start</label>
+          <input type="date" id="contract_start" name="contract_start" />
+        </div>
+        <div class="field">
+          <label for="contract_end">Contract end</label>
+          <input type="date" id="contract_end" name="contract_end" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-eyebrow">Step 9</div>
+      <h3>Employee Launch</h3>
+      <div class="form-row">
+        <div class="field">
+          <label for="launch_date">Launch date</label>
+          <input type="date" id="launch_date" name="launch_date" />
+        </div>
+        <div class="field">
+          <label for="logo_url">Company logo URL</label>
+          <input type="url" id="logo_url" name="logo_url" />
+        </div>
+      </div>
+      <label>Communication preference</label>
+      <div class="check-grid">
+        <% [['email','Email announcement'],['town_hall','HR town hall'],['webinar','Webinar'],['posters','Posters/QR codes'],['app_announcement','Internal app announcement']].forEach(([val,label]) => { %>
+          <div class="check-item"><input type="checkbox" name="communication_preference[]" value="<%= val %>" id="cp_<%= val %>" /><label for="cp_<%= val %>" style="margin:0; font-weight:400;"><%= label %></label></div>
+        <% }) %>
+      </div>
+    </div>
+
+    <div class="form-section" style="border-top: none;">
+      <button class="btn btn-primary" type="submit">Add Organization</button>
+      <a class="btn btn-secondary" href="/organizations">Cancel</a>
+    </div>
+  </div>
+</form>

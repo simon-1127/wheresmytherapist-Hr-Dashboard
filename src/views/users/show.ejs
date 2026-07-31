@@ -1,0 +1,70 @@
+<div class="topbar">
+  <div>
+    <h1><%= user.email || user.phone || 'User' %></h1>
+    <div class="subtitle">
+      <span class="badge badge-info"><%= user.role %></span>
+      <span class="badge <%= user.status === 'active' ? 'badge-success' : user.status === 'suspended' ? 'badge-warn' : 'badge-danger' %>"><%= user.status %></span>
+      <% if (orgLink) { %><span class="badge badge-neutral"><%= orgLink.organizations.company_name %> employee</span><% } %>
+    </div>
+  </div>
+  <div class="pill-nav">
+    <% if (user.status !== 'suspended') { %>
+      <form method="POST" action="/users/<%= user.id %>/status">
+        <input type="hidden" name="status" value="suspended" />
+        <button class="btn btn-secondary" type="submit">Suspend</button>
+      </form>
+    <% } else { %>
+      <form method="POST" action="/users/<%= user.id %>/status">
+        <input type="hidden" name="status" value="active" />
+        <button class="btn btn-secondary" type="submit">Reactivate</button>
+      </form>
+    <% } %>
+    <form method="POST" action="/users/<%= user.id %>/status" onsubmit="return confirm('Delete this user? Basic details are kept for logs, everything else is removed.');">
+      <input type="hidden" name="status" value="deleted" />
+      <button class="btn btn-danger" type="submit">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="grid grid-2col">
+  <div class="card">
+    <div class="card-header"><h2>Profile</h2></div>
+    <table>
+      <tr><td class="muted">Email</td><td><%= user.email || '—' %></td></tr>
+      <tr><td class="muted">Phone</td><td><%= user.phone || '—' %></td></tr>
+      <tr><td class="muted">Joined</td><td><%= new Date(user.created_at).toLocaleDateString() %></td></tr>
+      <% if (profile && user.role === 'client') { %>
+        <tr><td class="muted">Name</td><td><%= profile.full_name %></td></tr>
+        <tr><td class="muted">Subscription tier</td><td><span class="badge badge-info"><%= profile.subscription_tier %></span></td></tr>
+        <tr><td class="muted">Preferred language</td><td><%= profile.preferred_language || '—' %></td></tr>
+      <% } %>
+      <% if (profile && user.role === 'provider') { %>
+        <tr><td class="muted">Name</td><td><%= profile.full_name %></td></tr>
+        <tr><td class="muted">Title</td><td><%= profile.professional_title %></td></tr>
+        <tr><td class="muted">Application status</td><td><span class="badge badge-info"><%= profile.application_status %></span></td></tr>
+        <tr><td class="muted">KYC status</td><td><span class="badge badge-info"><%= profile.kyc_status %></span></td></tr>
+      <% } %>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Crisis alerts</h2></div>
+    <% if (!crisisAlerts.length) { %>
+      <div class="empty-state small">No crisis alerts on record for this user.</div>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Severity</th><th>Status</th><th>Trigger</th><th>Date</th></tr></thead>
+        <tbody>
+          <% crisisAlerts.forEach(c => { %>
+            <tr>
+              <td><span class="badge <%= c.severity >= 4 ? 'badge-danger' : c.severity >= 2 ? 'badge-warn' : 'badge-neutral' %>">Level <%= c.severity %></span></td>
+              <td><span class="badge <%= c.status === 'resolved' ? 'badge-success' : 'badge-warn' %>"><%= c.status %></span></td>
+              <td class="small muted"><%= c.trigger_type %></td>
+              <td class="small muted"><%= new Date(c.created_at).toLocaleDateString() %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</div>

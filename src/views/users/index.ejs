@@ -1,0 +1,54 @@
+<div class="topbar">
+  <div>
+    <h1>Users</h1>
+    <div class="subtitle">Individual clients, org employees, providers, and admins — kept separate.</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <a class="tab <%= segment === 'clients' ? 'active' : '' %>" href="/users?segment=clients">Individual Clients</a>
+  <a class="tab <%= segment === 'org_employees' ? 'active' : '' %>" href="/users?segment=org_employees">Org Employees</a>
+  <a class="tab <%= segment === 'providers' ? 'active' : '' %>" href="/users?segment=providers">Providers</a>
+  <a class="tab <%= segment === 'admins' ? 'active' : '' %>" href="/users?segment=admins">Admins</a>
+</div>
+
+<div class="card">
+  <form method="GET" action="/users" style="margin-bottom: 16px; display:flex; gap:8px;">
+    <input type="hidden" name="segment" value="<%= segment %>" />
+    <input type="text" name="search" placeholder="Search by email or phone…" value="<%= search %>" style="max-width:320px;" />
+    <button class="btn btn-secondary btn-sm" type="submit">Search</button>
+  </form>
+
+  <% if (!rows.length) { %>
+    <div class="empty-state">No users found.</div>
+  <% } else if (segment === 'org_employees') { %>
+    <table>
+      <thead><tr><th>Email</th><th>Organization</th><th>Status</th><th>Invited</th></tr></thead>
+      <tbody>
+        <% rows.forEach(r => { %>
+          <tr>
+            <td><%= r.email %></td>
+            <td><%= r.organizations ? r.organizations.company_name : '—' %></td>
+            <td><span class="badge <%= r.status === 'active' ? 'badge-success' : r.status === 'invited' ? 'badge-warn' : 'badge-neutral' %>"><%= r.status %></span></td>
+            <td class="small muted"><%= new Date(r.invited_at).toLocaleDateString() %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Email</th><th>Phone</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+      <tbody>
+        <% rows.forEach(r => { %>
+          <tr class="table-link-row" onclick="location.href='/users/<%= r.id %>'">
+            <td><%= r.email || '—' %></td>
+            <td><%= r.phone || '—' %></td>
+            <td><span class="badge <%= r.status === 'active' ? 'badge-success' : r.status === 'suspended' ? 'badge-warn' : 'badge-danger' %>"><%= r.status %></span></td>
+            <td class="small muted"><%= new Date(r.created_at).toLocaleDateString() %></td>
+            <td><a class="small" href="/users/<%= r.id %>">View →</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>

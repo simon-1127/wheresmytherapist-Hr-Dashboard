@@ -1,0 +1,39 @@
+<div class="topbar">
+  <div>
+    <h1>Organizations</h1>
+    <div class="subtitle">Partner companies onboarded to Where's My Therapist.</div>
+  </div>
+  <a class="btn btn-primary" href="/organizations/new">+ Add Organization</a>
+</div>
+
+<div class="card">
+  <% if (!orgs.length) { %>
+    <div class="empty-state">
+      <div class="glyph">🏢</div>
+      No organizations yet. <a href="/organizations/new">Add the first one</a>.
+    </div>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr><th>Organization</th><th>Industry</th><th>Size</th><th>Plan</th><th>Employees</th><th>Contract ends</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <% orgs.forEach(org => { %>
+          <tr class="table-link-row" onclick="location.href='/organizations/<%= org.id %>'">
+            <td><strong><%= org.company_name %></strong><div class="small muted"><%= org.spoc_name || '' %></div></td>
+            <td><%= org.industry || '—' %></td>
+            <td><%= org.size_category || '—' %></td>
+            <td><%= org.plan || '—' %></td>
+            <td><%= (employeeCounts[org.id] && employeeCounts[org.id].total) || 0 %> <span class="small muted">(<%= (employeeCounts[org.id] && employeeCounts[org.id].active) || 0 %> active)</span></td>
+            <td><%= org.contract_end || '—' %></td>
+            <td>
+              <span class="badge <%= org.status === 'active' ? 'badge-success' : org.status === 'churned' ? 'badge-danger' : 'badge-neutral' %>">
+                <%= org.status %>
+              </span>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>

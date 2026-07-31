@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('head') %>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img src="/img/logo.png" alt="" />
+        <div>
+          <span class="name">Where's My Therapist</span>
+          <span class="tag">HR Portal</span>
+        </div>
+      </div>
+
+      <a class="nav-link <%= path === '/hr' || path === '/hr/' ? 'active' : '' %>" href="/hr">◧ Dashboard</a>
+      <a class="nav-link <%= path.startsWith('/hr/employees') ? 'active' : '' %>" href="/hr/employees">👥 Employees</a>
+      <a class="nav-link <%= path.startsWith('/hr/leave-requests') ? 'active' : '' %>" href="/hr/leave-requests">🗓️ Leave Requests</a>
+      <a class="nav-link <%= path.startsWith('/hr/reports') ? 'active' : '' %>" href="/hr/reports">📊 Reports</a>
+
+      <div class="sidebar-footer">
+        <div class="small muted" style="padding: 0 12px 8px;"><%= currentHrContact ? currentHrContact.email : '' %></div>
+        <form method="POST" action="/hr/logout">
+          <button class="btn btn-secondary btn-block btn-sm" type="submit">Log out</button>
+        </form>
+      </div>
+    </aside>
+
+    <main class="main">
+      <% if (flash) { %>
+        <div class="flash flash-<%= flash.type %>"><%= flash.message %></div>
+      <% } %>
+      <%- body %>
+    </main>
+  </div>
+</body>
+</html>

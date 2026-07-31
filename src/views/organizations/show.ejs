@@ -1,0 +1,173 @@
+<div class="topbar">
+  <div>
+    <h1><%= org.company_name %></h1>
+    <div class="subtitle">
+      <%= org.industry || 'No industry set' %> ·
+      <span class="badge <%= org.status === 'active' ? 'badge-success' : org.status === 'churned' ? 'badge-danger' : 'badge-neutral' %>"><%= org.status %></span>
+    </div>
+  </div>
+  <div class="pill-nav">
+    <% if (org.status === 'active') { %>
+      <form method="POST" action="/organizations/<%= org.id %>/status" onsubmit="return confirm('End this org\'s contract? All employees will be deactivated and reverted to the free tier.');">
+        <input type="hidden" name="status" value="inactive" />
+        <button class="btn btn-secondary" type="submit">End Contract</button>
+      </form>
+    <% } else { %>
+      <form method="POST" action="/organizations/<%= org.id %>/status">
+        <input type="hidden" name="status" value="active" />
+        <button class="btn btn-primary" type="submit">Reactivate</button>
+      </form>
+    <% } %>
+  </div>
+</div>
+
+<div class="tabs">
+  <a class="tab <%= tab === 'profile' ? 'active' : '' %>" href="?tab=profile">Profile</a>
+  <a class="tab <%= tab === 'employees' ? 'active' : '' %>" href="?tab=employees">Employees (<%= employees.length %>)</a>
+  <a class="tab <%= tab === 'hr' ? 'active' : '' %>" href="?tab=hr">HR Contacts</a>
+  <a class="tab <%= tab === 'leave' ? 'active' : '' %>" href="?tab=leave">Leave Requests</a>
+  <a class="tab <%= tab === 'reports' ? 'active' : '' %>" href="?tab=reports">Reports</a>
+</div>
+
+<% if (tab === 'profile') { %>
+  <div class="grid grid-2col">
+    <div class="card">
+      <div class="card-header"><h2>Organization details</h2></div>
+      <table>
+        <tr><td class="muted">Website</td><td><%= org.website || '—' %></td></tr>
+        <tr><td class="muted">Employee count</td><td><%= org.employee_count || '—' %></td></tr>
+        <tr><td class="muted">Locations</td><td><%= (org.locations || []).join(', ') || '—' %></td></tr>
+        <tr><td class="muted">Size category</td><td><%= org.size_category || '—' %></td></tr>
+        <tr><td class="muted">Plan</td><td><%= org.plan || '—' %></td></tr>
+        <tr><td class="muted">App tier granted to employees</td><td><span class="badge badge-info"><%= org.subscription_tier_id %></span></td></tr>
+        <tr><td class="muted">Contract</td><td><%= org.contract_start || '—' %> to <%= org.contract_end || '—' %></td></tr>
+        <tr><td class="muted">Billing address</td><td><%= org.billing_address || '—' %></td></tr>
+        <tr><td class="muted">GST</td><td><%= org.gst_number || '—' %></td></tr>
+        <tr><td class="muted">Invoice email</td><td><%= org.invoice_email || '—' %></td></tr>
+        <tr><td class="muted">Payment terms</td><td><%= org.payment_terms || '—' %></td></tr>
+        <tr><td class="muted">Confidentiality agreed</td><td><%= org.confidentiality_agreed ? 'Yes' : 'No' %></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>Primary contact (internal reference)</h2></div>
+      <table>
+        <tr><td class="muted">Name</td><td><%= org.spoc_name || '—' %></td></tr>
+        <tr><td class="muted">Designation</td><td><%= org.spoc_designation || '—' %></td></tr>
+        <tr><td class="muted">Email</td><td><%= org.spoc_email || '—' %></td></tr>
+        <tr><td class="muted">Phone</td><td><%= org.spoc_phone || '—' %></td></tr>
+      </table>
+
+      <div class="card-header" style="margin-top: 22px;"><h2>Needs assessment</h2></div>
+      <p class="small muted" style="margin-bottom:6px;">Goals: <%= (org.goals || []).join(', ') || '—' %></p>
+      <p class="small muted">Services — Therapy: <%= (org.services_therapy || []).join(', ') || '—' %></p>
+      <p class="small muted">Services — Wellness: <%= (org.services_wellness || []).join(', ') || '—' %></p>
+      <p class="small muted">Services — Emergency: <%= (org.services_emergency || []).join(', ') || '—' %></p>
+    </div>
+  </div>
+<% } %>
+
+<% if (tab === 'employees') { %>
+  <div class="card">
+    <div class="card-header">
+      <h2>Employees</h2>
+      <% if (employees.length) { %>
+        <form method="POST" action="/organizations/<%= org.id %>/employees/delete-all" onsubmit="return confirm('Remove ALL employees for this organization? This keeps basic details for logs but deactivates every account.');">
+          <button class="btn btn-danger btn-sm" type="submit">Remove all employees</button>
+        </form>
+      <% } %>
+    </div>
+    <% if (!employees.length) { %>
+      <div class="empty-state">No employees onboarded yet. The org's HR contact adds employees from their own portal.</div>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Email</th><th>Status</th><th>Invited</th><th>Joined</th></tr></thead>
+        <tbody>
+          <% employees.forEach(e => { %>
+            <tr>
+              <td><%= e.email %></td>
+              <td><span class="badge <%= e.status === 'active' ? 'badge-success' : e.status === 'invited' ? 'badge-warn' : 'badge-neutral' %>"><%= e.status %></span></td>
+              <td class="small muted"><%= new Date(e.invited_at).toLocaleDateString() %></td>
+              <td class="small muted"><%= e.joined_at ? new Date(e.joined_at).toLocaleDateString() : '—' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+<% } %>
+
+<% if (tab === 'hr') { %>
+  <div class="card">
+    <div class="card-header"><h2>HR contacts</h2></div>
+    <% if (!hrContacts.length) { %>
+      <div class="empty-state">No HR contact set up yet.</div>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+        <tbody>
+          <% hrContacts.forEach(c => { %>
+            <tr>
+              <td><%= c.name || '—' %><div class="small muted"><%= c.designation || '' %></div></td>
+              <td><%= c.email %></td>
+              <td><span class="badge <%= c.status === 'active' ? 'badge-success' : 'badge-neutral' %>"><%= c.status %></span> <% if (c.must_reset_password) { %><span class="badge badge-warn">must reset password</span><% } %></td>
+              <td class="small muted"><%= c.last_login_at ? new Date(c.last_login_at).toLocaleString() : 'never' %></td>
+              <td>
+                <% if (c.status === 'active') { %>
+                  <form method="POST" action="/organizations/<%= org.id %>/hr-contacts/<%= c.id %>/disable">
+                    <button class="btn btn-secondary btn-sm" type="submit">Disable</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Add HR contact</h2></div>
+    <form method="POST" action="/organizations/<%= org.id %>/hr-contacts">
+      <div class="form-row">
+        <div class="field"><label for="hr_name">Name</label><input type="text" id="hr_name" name="name" /></div>
+        <div class="field"><label for="hr_designation">Designation</label><input type="text" id="hr_designation" name="designation" /></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label for="hr_email">Email</label><input type="email" id="hr_email" name="email" required /></div>
+        <div class="field"><label for="hr_phone">Phone</label><input type="tel" id="hr_phone" name="phone" /></div>
+      </div>
+      <button class="btn btn-primary" type="submit">Create access</button>
+    </form>
+  </div>
+<% } %>
+
+<% if (tab === 'leave') { %>
+  <div class="card">
+    <div class="card-header"><h2>Leave requests</h2></div>
+    <% if (!leaveRequests.length) { %>
+      <div class="empty-state">No leave requests submitted by this org's HR contact yet.</div>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Employee</th><th>Dates</th><th>Reason</th><th>Status</th></tr></thead>
+        <tbody>
+          <% leaveRequests.forEach(l => { %>
+            <tr>
+              <td class="small">employee</td>
+              <td class="small"><%= l.start_date %> → <%= l.end_date %></td>
+              <td class="small muted"><%= l.reason || '—' %></td>
+              <td><span class="badge <%= l.status === 'approved' ? 'badge-success' : l.status === 'rejected' ? 'badge-danger' : 'badge-warn' %>"><%= l.status %></span></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+<% } %>
+
+<% if (tab === 'reports') { %>
+  <div class="card">
+    <div class="card-header"><h2>Reports</h2></div>
+    <p class="muted small" style="margin-bottom: 16px;">Aggregate-only — matches what this org's HR contact can see. Individual employee therapy data is never surfaced here.</p>
+    <div class="coming-soon">Sessions utilised, engagement %, and wellbeing trend reports aren't wired up yet — this is a placeholder for that feature.</div>
+  </div>
+<% } %>

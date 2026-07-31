@@ -1,0 +1,24 @@
+{
+  "name": "wmt-hr-dashboard",
+  "version": "0.1.0",
+  "description": "Internal HR/admin dashboard for Where's My Therapist — organization onboarding, employee management, and general user administration.",
+  "private": true,
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.8",
+    "bcryptjs": "^2.4.3",
+    "cookie-session": "^2.1.0",
+    "dotenv": "^17.4.2",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-ejs-layouts": "^2.5.1",
+    "nodemailer": "^9.0.3"
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.9"
+  }
+}

@@ -1,0 +1,88 @@
+<div class="topbar">
+  <div>
+    <h1>Dashboard</h1>
+    <div class="subtitle">Here's what's happening across your partner organizations.</div>
+  </div>
+  <a class="btn btn-primary" href="/organizations/new">+ Add Organization</a>
+</div>
+
+<div class="grid grid-stats" style="margin-bottom: 20px;">
+  <div class="stat-card">
+    <div class="stat-icon teal">🏢</div>
+    <div class="stat-label">Total Organizations</div>
+    <div class="stat-value"><%= stats.totalOrgs %></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">👥</div>
+    <div class="stat-label">Total Employees Onboarded</div>
+    <div class="stat-value"><%= stats.totalEmployees %></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon teal">✅</div>
+    <div class="stat-label">Active Employees</div>
+    <div class="stat-value"><%= stats.activeEmployees %></div>
+    <div class="stat-foot"><%= stats.totalEmployees ? Math.round((stats.activeEmployees / stats.totalEmployees) * 100) : 0 %>% of total</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon warn">🗓️</div>
+    <div class="stat-label">Pending Leave Requests</div>
+    <div class="stat-value"><%= stats.pendingLeave %></div>
+    <% if (stats.pendingLeave > 0) { %><div class="stat-foot warn">Requires action</div><% } %>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon coral">🩺</div>
+    <div class="stat-label">Providers Awaiting Review</div>
+    <div class="stat-value"><%= stats.pendingKyc %></div>
+    <% if (stats.pendingKyc > 0) { %><div class="stat-foot warn"><a href="/providers">Review now →</a></div><% } %>
+  </div>
+</div>
+
+<div class="grid grid-2col">
+  <div class="card">
+    <div class="card-header">
+      <h2>Partner Organizations</h2>
+      <a class="small" href="/organizations">View all →</a>
+    </div>
+
+    <% if (!orgs.length) { %>
+      <div class="empty-state">
+        <div class="glyph">🏢</div>
+        No organizations yet. <a href="/organizations/new">Add the first one</a>.
+      </div>
+    <% } else { %>
+      <table>
+        <thead>
+          <tr><th>Organization</th><th>HR Contact</th><th>Employees</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <% orgs.forEach(org => { %>
+            <tr class="table-link-row" onclick="location.href='/organizations/<%= org.id %>'">
+              <td><strong><%= org.company_name %></strong></td>
+              <td><%= org.spoc_name || '—' %></td>
+              <td><%= employeeCounts[org.id] || 0 %></td>
+              <td>
+                <span class="badge <%= org.status === 'active' ? 'badge-success' : 'badge-neutral' %>">
+                  <%= org.status %>
+                </span>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Recent Activity</h2></div>
+    <% if (!recentAudit.length) { %>
+      <div class="empty-state small">Nothing logged yet.</div>
+    <% } else { %>
+      <% recentAudit.forEach(a => { %>
+        <div style="padding: 10px 0; border-bottom: 1px solid var(--border);">
+          <div style="font-size: 13px; font-weight: 500;"><%= a.action.replace(/_/g, ' ').replace(/\./g, ' · ') %></div>
+          <div class="small muted"><%= new Date(a.created_at).toLocaleString() %></div>
+        </div>
+      <% }) %>
+    <% } %>
+  </div>
+</div>

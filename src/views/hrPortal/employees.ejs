@@ -1,0 +1,46 @@
+<div class="topbar">
+  <div>
+    <h1>Employees</h1>
+    <div class="subtitle">Add your team by email — they'll get a link to set up their own account.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>Add employees</h2></div>
+  <form method="POST" action="/hr/employees">
+    <div class="field">
+      <label for="emails">Employee emails</label>
+      <textarea id="emails" name="emails" rows="4" placeholder="one@company.com&#10;two@company.com" required></textarea>
+      <div class="field-hint">One email per line.</div>
+    </div>
+    <button class="btn btn-primary" type="submit">Send invites</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>All employees (<%= employees.length %>)</h2></div>
+  <% if (!employees.length) { %>
+    <div class="empty-state">No employees added yet.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Email</th><th>Status</th><th>Invited</th><th>Joined</th><th></th></tr></thead>
+      <tbody>
+        <% employees.forEach(e => { %>
+          <tr>
+            <td><%= e.email %></td>
+            <td><span class="badge <%= e.status === 'active' ? 'badge-success' : e.status === 'invited' ? 'badge-warn' : 'badge-neutral' %>"><%= e.status %></span></td>
+            <td class="small muted"><%= new Date(e.invited_at).toLocaleDateString() %></td>
+            <td class="small muted"><%= e.joined_at ? new Date(e.joined_at).toLocaleDateString() : 'Not yet' %></td>
+            <td>
+              <% if (e.status !== 'inactive') { %>
+                <form method="POST" action="/hr/employees/<%= e.id %>/remove" onsubmit="return confirm('Remove this employee?');">
+                  <button class="btn btn-secondary btn-sm" type="submit">Remove</button>
+                </form>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>

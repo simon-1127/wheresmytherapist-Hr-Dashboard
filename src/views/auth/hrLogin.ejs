@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('../partials/head', { title: 'HR log in' }) %>
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card">
+      <img src="/img/logo.png" alt="Where's My Therapist" />
+      <h1>HR Portal</h1>
+      <div class="subtitle">Sign in to manage your organization</div>
+
+      <% if (error) { %>
+        <div class="flash flash-error"><%= error %></div>
+      <% } %>
+
+      <form method="POST" action="/hr/login">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required autofocus />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required />
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Log in</button>
+      </form>
+
+      <p class="small muted" style="margin-top:18px; text-align:center;">
+        Not sure what this is? Ask your Where's My Therapist contact.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

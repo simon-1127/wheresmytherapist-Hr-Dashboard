@@ -1,0 +1,39 @@
+<div class="topbar">
+  <div>
+    <h1>Good day, <%= org.company_name %> 👋</h1>
+    <div class="subtitle">Here's your organization's status on Where's My Therapist.</div>
+  </div>
+</div>
+
+<div class="grid grid-stats" style="margin-bottom: 20px;">
+  <div class="stat-card">
+    <div class="stat-icon teal">👥</div>
+    <div class="stat-label">Employees Onboarded</div>
+    <div class="stat-value"><%= stats.totalEmployees %></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">✅</div>
+    <div class="stat-label">Active</div>
+    <div class="stat-value"><%= stats.activeEmployees %></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon warn">🗓️</div>
+    <div class="stat-label">Pending Leave Requests</div>
+    <div class="stat-value"><%= stats.pendingLeave %></div>
+  </div>
+</div>
+
+<div class="grid grid-2col">
+  <div class="card">
+    <div class="card-header"><h2>Your plan</h2></div>
+    <table>
+      <tr><td class="muted">Plan</td><td><%= org.plan || '—' %></td></tr>
+      <tr><td class="muted">Contract</td><td><%= org.contract_start || '—' %> to <%= org.contract_end || '—' %></td></tr>
+    </table>
+    <p class="small muted" style="margin-top:14px;">Need to change your plan or contract details? Contact your Where's My Therapist account manager — this isn't editable from here.</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><h2>Confidentiality</h2></div>
+    <p class="small muted">Where's My Therapist maintains complete confidentiality. You receive only anonymous, aggregated reports — individual employee therapy information is never shared with your organization.</p>
+  </div>
+</div>

@@ -1,0 +1,47 @@
+<div class="topbar">
+  <div>
+    <h1>Providers</h1>
+    <div class="subtitle">Application and KYC review.</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <a class="tab <%= filter === 'pending_review' ? 'active' : '' %>" href="/providers?status=pending_review">Pending review</a>
+  <a class="tab <%= filter === 'approved' ? 'active' : '' %>" href="/providers?status=approved">Approved</a>
+  <a class="tab <%= filter === 'rejected' ? 'active' : '' %>" href="/providers?status=rejected">Rejected</a>
+  <a class="tab <%= filter === 'all' ? 'active' : '' %>" href="/providers?status=all">All</a>
+</div>
+
+<div class="card">
+  <% if (!providers.length) { %>
+    <div class="empty-state">Nothing here.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Name</th><th>Title</th><th>Experience</th><th>License</th><th>Application</th><th>KYC</th><th></th></tr></thead>
+      <tbody>
+        <% providers.forEach(p => { %>
+          <tr>
+            <td><%= p.full_name %></td>
+            <td class="small muted"><%= p.professional_title %></td>
+            <td class="small"><%= p.years_experience %> yrs</td>
+            <td class="small muted"><%= p.license_no || '—' %></td>
+            <td><span class="badge badge-info"><%= p.application_status %></span></td>
+            <td><span class="badge <%= p.kyc_status === 'verified' ? 'badge-success' : 'badge-neutral' %>"><%= p.kyc_status %></span></td>
+            <td>
+              <% if (['submitted','under_review'].includes(p.application_status)) { %>
+                <form method="POST" action="/providers/<%= p.user_id %>/decision" style="display:inline;">
+                  <input type="hidden" name="decision" value="approved" />
+                  <button class="btn btn-secondary btn-sm" type="submit">Approve</button>
+                </form>
+                <form method="POST" action="/providers/<%= p.user_id %>/decision" style="display:inline;" onsubmit="return confirm('Reject this application?');">
+                  <input type="hidden" name="decision" value="rejected" />
+                  <button class="btn btn-danger btn-sm" type="submit">Reject</button>
+                </form>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
