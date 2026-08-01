@@ -10,11 +10,21 @@ router.get('/login', (req, res) => {
   if (req.session.superAdmin) return res.redirect('/');
   res.render('auth/login', { error: null, layout: false });
 });
+const { createClient } = require('@supabase/supabase-js');
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // Use a throwaway client just for sign-in — never the shared `supabase`
+    // singleton. Calling signInWithPassword on that shared instance would
+    // overwrite its session, making every later query on it (including the
+    // admin_roles check below) silently run as this user under RLS instead
+    // of as service_role.
+    const authClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await authClient.auth.signInWithPassword({ email, password });
+
     if (error || !data.user) {
       return res.render('auth/login', { error: 'Invalid email or password.', layout: false });
     }
@@ -25,16 +35,16 @@ router.post('/login', async (req, res) => {
       .eq('user_id', data.user.id)
       .eq('role_type', 'super_admin')
       .maybeSingle();
-if (roleErr) {
-  console.error('[auth] admin_roles query failed:', roleErr);
-}
-if (roleErr || !roleRow) {
-  console.log('[auth] no matching super_admin row for user_id:', data.user.id);
-  return res.render('auth/login', {
-    error: 'This account does not have super admin access.',
-    layout: false,
-  });
-}
+    if (roleErr) {
+      console.error('[auth] admin_roles query failed:', roleErr);
+    }
+    if (roleErr || !roleRow) {
+      console.log('[auth] no matching super_admin row for user_id:', data.user.id);
+      return res.render('auth/login', {
+        error: 'This account does not have super admin access.',
+        layout: false,
+      });
+    }
     req.session.superAdmin = { id: data.user.id, email: data.user.email };
     res.redirect('/');
   } catch (err) {
