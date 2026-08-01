@@ -25,14 +25,16 @@ router.post('/login', async (req, res) => {
       .eq('user_id', data.user.id)
       .eq('role_type', 'super_admin')
       .maybeSingle();
-
-    if (roleErr || !roleRow) {
-      return res.render('auth/login', {
-        error: 'This account does not have super admin access.',
-        layout: false,
-      });
-    }
-
+if (roleErr) {
+  console.error('[auth] admin_roles query failed:', roleErr);
+}
+if (roleErr || !roleRow) {
+  console.log('[auth] no matching super_admin row for user_id:', data.user.id);
+  return res.render('auth/login', {
+    error: 'This account does not have super admin access.',
+    layout: false,
+  });
+}
     req.session.superAdmin = { id: data.user.id, email: data.user.email };
     res.redirect('/');
   } catch (err) {
