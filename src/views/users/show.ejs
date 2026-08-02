@@ -35,7 +35,17 @@
       <tr><td class="muted">Joined</td><td><%= new Date(user.created_at).toLocaleDateString() %></td></tr>
       <% if (profile && user.role === 'client') { %>
         <tr><td class="muted">Name</td><td><%= profile.full_name %></td></tr>
-        <tr><td class="muted">Subscription tier</td><td><span class="badge badge-info"><%= profile.subscription_tier %></span></td></tr>
+        <tr><td class="muted">Subscription tier</td><td>
+          <form method="POST" action="/users/<%= user.id %>/tier" style="display:flex; gap:8px; align-items:center;">
+            <select name="subscription_tier">
+              <option value="HR-Onboarding" <%= profile.subscription_tier === 'HR-Onboarding' ? 'selected' : '' %>>HR-Onboarding</option>
+              <option value="growth" <%= profile.subscription_tier === 'growth' ? 'selected' : '' %>>Growth</option>
+              <option value="starter" <%= profile.subscription_tier === 'starter' ? 'selected' : '' %>>Starter</option>
+              <option value="free" <%= profile.subscription_tier === 'free' ? 'selected' : '' %>>Free</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" type="submit">Update</button>
+          </form>
+        </td></tr>
         <tr><td class="muted">Preferred language</td><td><%= profile.preferred_language || '—' %></td></tr>
       <% } %>
       <% if (profile && user.role === 'provider') { %>
@@ -61,6 +71,47 @@
               <td><span class="badge <%= c.status === 'resolved' ? 'badge-success' : 'badge-warn' %>"><%= c.status %></span></td>
               <td class="small muted"><%= c.trigger_type %></td>
               <td class="small muted"><%= new Date(c.created_at).toLocaleDateString() %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</div>
+
+<div class="grid grid-2col" style="margin-top:16px;">
+  <div class="card">
+    <div class="card-header"><h2>Payment history</h2></div>
+    <% if (!payments.length) { %>
+      <div class="empty-state small">No payments on record.</div>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody>
+          <% payments.forEach(p => { %>
+            <tr>
+              <td><%= p.sessions.currency %> <%= (p.amount / 100).toFixed(2) %></td>
+              <td><span class="badge badge-info"><%= p.status %></span></td>
+              <td class="small muted"><%= new Date(p.created_at).toLocaleDateString() %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Session history</h2></div>
+    <% if (!sessionHistory.length) { %>
+      <div class="empty-state small">No sessions on record.</div>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Scheduled</th><th>Status</th></tr></thead>
+        <tbody>
+          <% sessionHistory.forEach(s => { %>
+            <tr>
+              <td class="small muted"><%= new Date(s.scheduled_start).toLocaleString() %></td>
+              <td><span class="badge badge-info"><%= s.status %></span></td>
             </tr>
           <% }) %>
         </tbody>

@@ -12,8 +12,15 @@ router.get('/login', (req, res) => {
 });
 const { createClient } = require('@supabase/supabase-js');
 
+// Default session (set in server.js) is 12 hours — that's the whole "logs
+// out too often" complaint. cookie-session supports overriding maxAge for
+// the current request/response via req.sessionOptions; setting it here
+// after a successful "remember me" login extends just that cookie without
+// touching the app-wide default for everyone else.
+const REMEMBER_ME_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, rememberMe } = req.body;
   try {
     // Use a throwaway client just for sign-in — never the shared `supabase`
     // singleton. Calling signInWithPassword on that shared instance would
@@ -46,6 +53,9 @@ router.post('/login', async (req, res) => {
       });
     }
     req.session.superAdmin = { id: data.user.id, email: data.user.email };
+    if (rememberMe === 'on') {
+      req.sessionOptions.maxAge = REMEMBER_ME_MAX_AGE;
+    }
     res.redirect('/');
   } catch (err) {
     console.error('[auth] super admin login failed:', err);
@@ -134,6 +144,55 @@ router.post('/hr/reset-password', async (req, res) => {
 
   req.session.hrContact.mustResetPassword = false;
   res.redirect('/hr');
+});
+
+// ---------- Support agent ----------
+// Same underlying mechanism as super admin (real Supabase Auth user +
+// admin_roles row), kept as a fully separate route/session key so this
+// never touches the super admin login above.
+
+router.get('/support/login', (req, res) => {
+  if (req.session.superAdmin || req.session.supportAgent) return res.redirect('/support');
+  res.render('auth/supportLogin', { error: null, layout: false });
+});
+
+router.post('/support/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const authClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await authClient.auth.signInWithPassword({ email, password });
+
+    if (error || !data.user) {
+      return res.render('auth/supportLogin', { error: 'Invalid email or password.', layout: false });
+    }
+
+    const { data: roleRow, error: roleErr } = await supabase
+      .from('admin_roles')
+      .select('role_type')
+      .eq('user_id', data.user.id)
+      .eq('role_type', 'support_agent')
+      .maybeSingle();
+
+    if (roleErr || !roleRow) {
+      return res.render('auth/supportLogin', {
+        error: 'This account does not have support access.',
+        layout: false,
+      });
+    }
+
+    req.session.supportAgent = { id: data.user.id, email: data.user.email };
+    res.redirect('/support');
+  } catch (err) {
+    console.error('[auth] support agent login failed:', err);
+    res.render('auth/supportLogin', { error: 'Something went wrong. Try again.', layout: false });
+  }
+});
+
+router.post('/support/logout', (req, res) => {
+  req.session = null;
+  res.redirect('/support/login');
 });
 
 module.exports = router;

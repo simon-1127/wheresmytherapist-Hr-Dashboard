@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('head') %>
+</head>
+<body>
+  <div class="app-shell">
+    <main class="main" style="margin: 0 auto; max-width: 800px; float: none;">
+      <div class="topbar">
+        <div><span class="tag">Support</span></div>
+        <form method="POST" action="/support/logout">
+          <button class="btn btn-secondary btn-sm" type="submit">Log out</button>
+        </form>
+      </div>
+      <% if (flash) { %>
+        <div class="flash flash-<%= flash.type %>"><%= flash.message %></div>
+      <% } %>
+      <%- body %>
+    </main>
+  </div>
+</body>
+</html>

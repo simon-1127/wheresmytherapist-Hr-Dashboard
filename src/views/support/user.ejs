@@ -1,0 +1,24 @@
+<div class="card">
+  <div class="card-header"><h2><%= profile.full_name || profile.email %></h2></div>
+  <table>
+    <tr><td class="muted">Email</td><td><%= profile.email || '—' %></td></tr>
+    <tr><td class="muted">Phone</td><td><%= profile.phone || '—' %></td></tr>
+    <tr><td class="muted">Tier</td><td><span class="badge badge-info"><%= profile.subscription_tier %></span></td></tr>
+  </table>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Flagged conversation</h2></div>
+  <p class="small muted">Only this conversation is shown, not the client's full chat history.</p>
+
+  <% if (!messages.length) { %>
+    <div class="empty-state small">No message reference on this link.</div>
+  <% } else { %>
+    <% messages.forEach(m => { %>
+      <div style="padding:10px 12px; margin-bottom:8px; border-radius:6px; background: <%= m.id === flaggedMessageId ? '#fee2e2' : '#f5f5f5' %>; <%= m.id === flaggedMessageId ? 'border-left:4px solid #dc2626;' : '' %>">
+        <div class="small muted"><%= m.sender === 'ai' ? 'AI companion' : 'Client' %> · <%= new Date(m.created_at).toLocaleString() %></div>
+        <div><%= m.content %></div>
+      </div>
+    <% }) %>
+  <% } %>
+</div>

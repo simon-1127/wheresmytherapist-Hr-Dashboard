@@ -29,4 +29,17 @@ function requireHrContact(req, res, next) {
   next();
 }
 
-module.exports = { requireSuperAdmin, requireHrContact };
+// 3. Support agent — same shape as super admin (real Supabase Auth user,
+//    admin_roles row, role_type = 'support_agent'), but scoped to only the
+//    crisis-review pages reached via a crisis alert email link. A super
+//    admin session also satisfies this, since super admins can see
+//    everything a support agent can.
+function requireSupportAccess(req, res, next) {
+  if (!req.session || (!req.session.superAdmin && !req.session.supportAgent)) {
+    return res.redirect('/support/login');
+  }
+  res.locals.currentSupportAgent = req.session.supportAgent || null;
+  next();
+}
+
+module.exports = { requireSuperAdmin, requireHrContact, requireSupportAccess };

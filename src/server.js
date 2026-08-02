@@ -11,6 +11,8 @@ const usersRoutes = require('./routes/users.routes');
 const providersRoutes = require('./routes/providers.routes');
 const settingsRoutes = require('./routes/settings.routes');
 const hrPortalRoutes = require('./routes/hrPortal.routes');
+const supportRoutes = require('./routes/support.routes');
+const onboardingRoutes = require('./routes/onboarding.routes');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -72,6 +74,8 @@ app.use('/users', usersRoutes);
 app.use('/providers', providersRoutes);
 app.use('/settings', settingsRoutes);
 app.use('/hr', hrPortalRoutes);
+app.use('/support', supportRoutes);
+app.use('/onboarding', onboardingRoutes);
 
 app.use((req, res) => {
   res.status(404).render('errors/404', { layout: false });

@@ -1,0 +1,42 @@
+<div class="topbar">
+  <div>
+    <h1>Onboarding</h1>
+    <div class="subtitle">Add employees or providers directly, without needing them to sign up on the general app first.</div>
+  </div>
+</div>
+
+<div class="grid grid-2col">
+  <div class="card">
+    <div class="card-header"><h2>Add employee</h2></div>
+    <form method="POST" action="/onboarding/employees">
+      <div class="field">
+        <label for="emp_email">Email</label>
+        <input type="email" id="emp_email" name="email" required />
+      </div>
+      <div class="field">
+        <label for="org_id">Organization</label>
+        <select id="org_id" name="org_id" required>
+          <% orgs.forEach(o => { %>
+            <option value="<%= o.id %>"><%= o.company_name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit">Add & invite</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Add provider</h2></div>
+    <form method="POST" action="/onboarding/providers">
+      <div class="field">
+        <label for="prov_email">Email</label>
+        <input type="email" id="prov_email" name="email" required />
+      </div>
+      <div class="field">
+        <label for="prov_name">Full name</label>
+        <input type="text" id="prov_name" name="full_name" required />
+      </div>
+      <button class="btn btn-primary" type="submit">Create account</button>
+    </form>
+  </div>
+</div>

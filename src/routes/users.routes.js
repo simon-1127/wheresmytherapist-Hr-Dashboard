@@ -71,12 +71,51 @@ router.get('/:id', async (req, res) => {
     .eq('user_id', id)
     .order('created_at', { ascending: false });
 
+  // payments has no user_id column — it links to the user via
+  // sessions.client_id, so filter through an inner join on that.
+  const { data: payments } = await supabase
+    .from('payments')
+    .select('id, amount, status, method, created_at, sessions!inner(client_id, currency)')
+    .eq('sessions.client_id', id)
+    .order('created_at', { ascending: false });
+
+  const { data: sessionHistory } = await supabase
+    .from('sessions')
+    .select('id, provider_id, scheduled_start, status')
+    .eq('client_id', id)
+    .order('scheduled_start', { ascending: false });
+
   res.render('users/show', {
     user,
     profile,
     orgLink,
     crisisAlerts: crisisAlerts || [],
+    payments: payments || [],
+    sessionHistory: sessionHistory || [],
   });
+});
+
+router.post('/:id/tier', async (req, res) => {
+  const { id } = req.params;
+  const { subscription_tier } = req.body;
+
+  // A DB trigger (fn_enforce_language_tier) can reject this if the user's
+  // preferred_language isn't in the new tier's allowed_language_codes —
+  // surface that as a flash message instead of a 500.
+  const { error } = await supabase.from('client_profiles').update({ subscription_tier }).eq('user_id', id);
+  if (error) {
+    req.setFlash({ type: 'error', message: 'Could not change tier — ' + error.message });
+    return res.redirect(`/users/${id}`);
+  }
+
+  await logAction({
+    adminId: req.session.superAdmin.id,
+    action: `user.tier.${subscription_tier}`,
+    targetTable: 'client_profiles',
+    targetId: id,
+  });
+
+  res.redirect(`/users/${id}`);
 });
 
 router.post('/:id/status', async (req, res) => {
