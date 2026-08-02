@@ -38,7 +38,9 @@ router.post('/team-members', async (req, res) => {
     email_confirm: true,
   });
   if (error) {
-    req.setFlash({ type: 'error', message: 'Could not create account — ' + error.message });
+    console.error('[onboarding] createUser failed:', error);
+    const msg = error.message || error.error_description || 'Unknown error — check server logs.';
+    req.setFlash({ type: 'error', message: 'Could not create account — ' + msg });
     return res.redirect('/onboarding');
   }
 
