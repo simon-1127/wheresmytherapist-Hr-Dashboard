@@ -8,63 +8,72 @@ const { sendMail } = require('../config/mailer');
 const router = express.Router();
 router.use(requireSuperAdmin);
 
-router.get('/', async (req, res) => {
-  const { data: orgs } = await supabase
-    .from('organizations')
-    .select('id, company_name')
-    .eq('status', 'active')
-    .order('company_name', { ascending: true });
+// Only these are creatable here. super_admin is deliberately excluded —
+// that's granted directly in the DB by design (see settings.routes.js's
+// original comment), never through a web form.
+const ASSIGNABLE_ROLES = ['support_agent', 'content_moderator', 'finance'];
 
-  res.render('onboarding/index', { orgs: orgs || [], result: null });
+router.get('/', (req, res) => {
+  res.render('onboarding/index', { result: null });
 });
 
-// ---------- Employee ----------
-// Note: this doesn't replace the HR portal's own employee-add flow
-// (routes/hrPortal.routes.js) — that already creates the account
-// immediately via generateLink, no gap there. This exists so WMT can add
-// an employee directly without going through an org's HR contact at all
-// (e.g. org has no HR contact set up yet, or WMT is onboarding on their
-// behalf).
+// ---------- WMT team members ----------
+// Note: this is NOT for organization employees — orgs add their own
+// employees themselves via their SPOC/HR-contact login (see
+// routes/hrPortal.routes.js). This is only for WMT's own internal staff
+// getting an admin_roles-based role.
 
-router.post('/employees', async (req, res) => {
-  const { email, org_id } = req.body;
+router.post('/team-members', async (req, res) => {
+  const { email, role_type } = req.body;
 
-  const { error } = await supabase.from('organization_employees').insert({
-    org_id,
-    email,
-  });
-  if (error) {
-    req.setFlash({ type: 'error', message: 'Could not add employee — ' + error.message });
+  if (!ASSIGNABLE_ROLES.includes(role_type)) {
+    req.setFlash({ type: 'error', message: 'Not a valid role for this form.' });
     return res.redirect('/onboarding');
   }
 
-  try {
-    const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email,
-      options: { redirectTo: process.env.EMPLOYEE_REDIRECT_URL },
-    });
-    if (!linkErr && linkData) {
-      await sendMail({
-        to: email,
-        subject: "You're invited to Where's My Therapist",
-        html: `<p>You've been set up with access to Where's My Therapist.</p>
-          <p><a href="${linkData.properties.action_link}">Click here to get started</a></p>`,
-      });
-    }
-  } catch (err) {
-    console.error('[onboarding] magic link generation failed for', email, err);
+  const tempPassword = generateTempPassword();
+  const { data, error } = await supabase.auth.admin.createUser({
+    email,
+    password: tempPassword,
+    email_confirm: true,
+  });
+  if (error) {
+    req.setFlash({ type: 'error', message: 'Could not create account — ' + error.message });
+    return res.redirect('/onboarding');
+  }
+
+  const { error: roleErr } = await supabase.from('admin_roles').insert({
+    user_id: data.user.id,
+    role_type,
+    granted_by: req.session.superAdmin.id,
+  });
+  if (roleErr) {
+    req.setFlash({ type: 'error', message: 'Account created but role assignment failed — ' + roleErr.message });
+    return res.redirect('/onboarding');
   }
 
   await logAction({
     adminId: req.session.superAdmin.id,
-    action: 'onboarding.employee.added',
-    targetTable: 'organization_employees',
-    targetId: org_id,
-    details: { email },
+    action: `team_member.created.${role_type}`,
+    targetTable: 'admin_roles',
+    targetId: data.user.id,
   });
 
-  req.setFlash({ type: 'success', message: `${email} added and invited.` });
+  try {
+    await sendMail({
+      to: email,
+      subject: "Team access — Where's My Therapist",
+      html: `<p>Login email: <strong>${email}</strong><br/>Temporary password: <strong>${tempPassword}</strong></p>
+        <p>Sign in at ${process.env.SUPPORT_DASHBOARD_URL}/support/login</p>`,
+    });
+  } catch (err) {
+    console.error('[onboarding] team member invite email failed:', err);
+  }
+
+  req.setFlash({
+    type: 'success',
+    message: `${role_type.replace('_', ' ')} added. Temp password (shown once): ${tempPassword}`,
+  });
   res.redirect('/onboarding');
 });
 

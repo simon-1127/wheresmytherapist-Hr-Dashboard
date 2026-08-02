@@ -25,25 +25,22 @@
 </div>
 
 <div class="card" style="margin-top:16px;">
-  <div class="card-header"><h2>Support agents</h2></div>
-  <% if (!supportAgents.length) { %>
-    <div class="empty-state small">No support agents yet.</div>
+  <div class="card-header"><h2>Team members</h2></div>
+  <div class="subtitle" style="margin-bottom:12px;">Support agents, content moderators, and finance — added from the Onboarding tab.</div>
+  <% if (!teamMembers.length) { %>
+    <div class="empty-state small">No team members yet.</div>
   <% } else { %>
     <table>
-      <thead><tr><th>Email</th><th>Granted</th></tr></thead>
+      <thead><tr><th>Email</th><th>Role</th><th>Granted</th></tr></thead>
       <tbody>
-        <% supportAgents.forEach(a => { %>
+        <% teamMembers.forEach(a => { %>
           <tr>
             <td><%= a.user ? a.user.email : a.user_id %></td>
+            <td><span class="badge badge-info"><%= a.role_type.replace('_', ' ') %></span></td>
             <td class="small muted"><%= new Date(a.granted_at).toLocaleDateString() %></td>
           </tr>
         <% }) %>
       </tbody>
     </table>
   <% } %>
-
-  <form method="POST" action="/settings/support-agents" style="margin-top:16px; display:flex; gap:8px;">
-    <input type="email" name="email" required placeholder="Email" style="flex:1;" />
-    <button class="btn btn-primary" type="submit">Add support agent</button>
-  </form>
 </div>
