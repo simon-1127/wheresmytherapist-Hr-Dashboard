@@ -5,7 +5,15 @@ const { requireSupportAccess } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireSupportAccess);
 
-router.get('/', (req, res) => res.redirect('/settings'));
+// This was `res.redirect('/settings')` — a leftover stub. /settings
+// requires super_admin, so a support agent landing here right after a
+// successful login got bounced straight back to a login page. The real
+// support pages are /support/user/:userId, reached only via a crisis-alert
+// email link — there's no support "home" to redirect to yet, so this just
+// says so instead of redirecting somewhere that immediately fails.
+router.get('/', (req, res) => {
+  res.render('support/home', { currentSupportAgent: res.locals.currentSupportAgent, layout: 'partials/supportLayout' });
+});
 
 router.get('/user/:userId', async (req, res) => {
   const { userId } = req.params;
