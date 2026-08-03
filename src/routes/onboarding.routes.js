@@ -37,12 +37,6 @@ router.post('/team-members', async (req, res) => {
     password: tempPassword,
     email_confirm: true,
   });
-  // handle_new_auth_user's trigger inserts public.users with role='client'
-  // hardcoded for every new auth user — this flips it to 'provider'
-  // immediately, same as the self-signup flow's markAsProvider() does
-  // client-side. Without this the account is permanently misrouted as a
-  // client (see app_router.dart's role gate).
-  await supabase.from('users').update({ role: 'provider' }).eq('id', data.user.id);
   if (error) {
     console.error('[onboarding] createUser failed:', error);
     const msg = error.message || error.error_description || 'Unknown error — check server logs.';
@@ -108,11 +102,24 @@ router.post('/providers', async (req, res) => {
     return res.redirect('/onboarding');
   }
 
+  // handle_new_auth_user's trigger inserts public.users with role='client'
+  // hardcoded for every new auth user — this flips it to 'provider'
+  // immediately, same as the self-signup flow's markAsProvider() does
+  // client-side. Without this the account is permanently misrouted as a
+  // client (see app_router.dart's role gate).
+  await supabase.from('users').update({ role: 'provider' }).eq('id', data.user.id);
+
   // professional_title, years_experience, base_session_rate are NOT NULL
   // with no default — placeholder values here, provider fills in real ones
   // when they complete their profile. application_status stays 'draft'
   // (the actual DB default) since nothing's been submitted yet — this also
   // correctly keeps them out of the pending-review queue until they do.
+  // profile_completed_by_provider / password_set_by_provider: false — both
+  // flip to true from the app side once the provider actually fills in
+  // their real profile and sets their own password (see
+  // migrations/0002 and 0007). Needed so the router sends them through
+  // those steps instead of skipping straight to the KYC stub with
+  // placeholder data and a temp password they never got to change.
   await supabase.from('provider_profiles').insert({
     user_id: data.user.id,
     full_name,
@@ -120,8 +127,8 @@ router.post('/providers', async (req, res) => {
     years_experience: 0,
     base_session_rate: 1,
     application_status: 'draft',
-
-    profile_completed_by_provider: false, 
+    profile_completed_by_provider: false,
+    password_set_by_provider: false,
   });
 
   await logAction({
