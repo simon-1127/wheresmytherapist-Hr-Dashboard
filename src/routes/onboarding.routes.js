@@ -24,7 +24,7 @@ router.get('/', (req, res) => {
 // getting an admin_roles-based role.
 
 router.post('/team-members', async (req, res) => {
-  const { email, role_type } = req.body;
+  const { email, role_type, full_name } = req.body;
 
   if (!ASSIGNABLE_ROLES.includes(role_type)) {
     req.setFlash({ type: 'error', message: 'Not a valid role for this form.' });
@@ -47,6 +47,7 @@ router.post('/team-members', async (req, res) => {
   const { error: roleErr } = await supabase.from('admin_roles').insert({
     user_id: data.user.id,
     role_type,
+    full_name,
     granted_by: req.session.superAdmin.id,
   });
   if (roleErr) {

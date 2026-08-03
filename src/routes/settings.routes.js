@@ -8,7 +8,7 @@ router.use(requireSuperAdmin);
 async function loadAdminRoles(roleTypes) {
   const { data: adminRoles } = await supabase
     .from('admin_roles')
-    .select('user_id, role_type, granted_at, granted_by')
+    .select('user_id, role_type, full_name, granted_at, granted_by')
     .in('role_type', roleTypes);
 
   if (!adminRoles || !adminRoles.length) return [];
