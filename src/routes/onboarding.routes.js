@@ -24,18 +24,29 @@ router.get('/', (req, res) => {
 // getting an admin_roles-based role.
 
 router.post('/team-members', async (req, res) => {
-  const { email, role_type, full_name } = req.body;
+  const { email, role_type, full_name, password } = req.body;
 
   if (!ASSIGNABLE_ROLES.includes(role_type)) {
     req.setFlash({ type: 'error', message: 'Not a valid role for this form.' });
     return res.redirect('/onboarding');
   }
 
-  const tempPassword = generateTempPassword();
+  // Set directly by the admin rather than auto-generated — there's no
+  // self-serve password reset for the dashboard yet (support_agent/
+  // content_moderator/finance don't have one; HR contacts do, via
+  // /hr/reset-password, but that's a separate system entirely), so a lost
+  // auto-generated password had no recovery path short of deleting and
+  // recreating the account. A real reset flow for the dashboard is planned
+  // separately; this is the interim.
   const { data, error } = await supabase.auth.admin.createUser({
     email,
-    password: tempPassword,
+    password,
     email_confirm: true,
+    // Populates the "Display Name" column in Supabase's own Authentication >
+    // Users list, which reads from raw_user_meta_data — admin_roles.full_name
+    // (below) is a separate table Supabase's own dashboard has no visibility
+    // into, so storing the name there alone never showed up there.
+    user_metadata: { full_name },
   });
   if (error) {
     console.error('[onboarding] createUser failed:', error);
@@ -66,8 +77,8 @@ router.post('/team-members', async (req, res) => {
     await sendMail({
       to: email,
       subject: "Team access — Where's My Therapist",
-      html: `<p>Login email: <strong>${email}</strong><br/>Temporary password: <strong>${tempPassword}</strong></p>
-        <p>Sign in at ${process.env.SUPPORT_DASHBOARD_URL}/support/login</p>`,
+      html: `<p>Login email: <strong>${email}</strong></p>
+        <p>Sign in at ${process.env.SUPPORT_DASHBOARD_URL}/support/login — your admin will share your password with you directly.</p>`,
     });
   } catch (err) {
     console.error('[onboarding] team member invite email failed:', err);
@@ -75,7 +86,7 @@ router.post('/team-members', async (req, res) => {
 
   req.setFlash({
     type: 'success',
-    message: `${role_type.replace('_', ' ')} added. Temp password (shown once): ${tempPassword}`,
+    message: `${role_type.replace('_', ' ')} added.`,
   });
   res.redirect('/onboarding');
 });
@@ -96,6 +107,10 @@ router.post('/providers', async (req, res) => {
     email,
     password: tempPassword,
     email_confirm: true,
+    // Same fix as team-members above — populates Supabase's own Auth >
+    // Users "Display Name" column, which provider_profiles.full_name alone
+    // (a separate table) was never visible to.
+    user_metadata: { full_name },
   });
   if (error) {
     req.setFlash({ type: 'error', message: 'Could not create provider — ' + error.message });

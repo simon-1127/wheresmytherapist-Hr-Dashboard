@@ -18,6 +18,11 @@
         <input type="text" id="tm_name" name="full_name" required />
       </div>
       <div class="field">
+        <label for="tm_password">Password</label>
+        <input type="password" id="tm_password" name="password" required minlength="8" autocomplete="new-password" />
+        <div class="small muted">At least 8 characters. There's no self-serve password reset for the dashboard yet — share this with them directly.</div>
+      </div>
+      <div class="field">
         <label for="role_type">Role</label>
         <select id="role_type" name="role_type" required>
           <option value="support_agent">Support Agent</option>
