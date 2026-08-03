@@ -37,6 +37,12 @@ router.post('/team-members', async (req, res) => {
     password: tempPassword,
     email_confirm: true,
   });
+  // handle_new_auth_user's trigger inserts public.users with role='client'
+  // hardcoded for every new auth user — this flips it to 'provider'
+  // immediately, same as the self-signup flow's markAsProvider() does
+  // client-side. Without this the account is permanently misrouted as a
+  // client (see app_router.dart's role gate).
+  await supabase.from('users').update({ role: 'provider' }).eq('id', data.user.id);
   if (error) {
     console.error('[onboarding] createUser failed:', error);
     const msg = error.message || error.error_description || 'Unknown error — check server logs.';
@@ -114,6 +120,8 @@ router.post('/providers', async (req, res) => {
     years_experience: 0,
     base_session_rate: 1,
     application_status: 'draft',
+
+    profile_completed_by_provider: false, 
   });
 
   await logAction({
