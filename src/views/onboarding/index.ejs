@@ -36,6 +36,7 @@
 
   <div class="card">
     <div class="card-header"><h2>Add provider</h2></div>
+    <p class="small muted">Creates a brand new account with a temporary password. To make a provider out of someone who already has an account, use <a href="/onboarding/upgrade">Upgrade an existing user</a> instead.</p>
     <form method="POST" action="/onboarding/providers">
       <div class="field">
         <label for="prov_email">Email</label>
@@ -48,4 +49,19 @@
       <button class="btn btn-primary" type="submit">Create account</button>
     </form>
   </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Upgrade an existing user</h2></div>
+  <p class="small muted">
+    For a therapist who already signed up as a client. Their login, email and password stay exactly
+    as they are — only the side of the app they land in changes.
+  </p>
+  <form method="GET" action="/onboarding/upgrade" style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+    <div class="field" style="margin-bottom:0; flex:1; min-width:260px;">
+      <label for="upgrade_search">Name, email, or phone</label>
+      <input type="text" id="upgrade_search" name="search" placeholder="Search client accounts" />
+    </div>
+    <button class="btn btn-secondary" type="submit">Find account</button>
+  </form>
 </div>

@@ -133,6 +133,237 @@ router.post(
   }),
 );
 
+
+// ----------------------------------------------- check-in questions ---
+// The daily check-in is the mood tracking instrument, so this is where its
+// questions are written and corrected. Reachable by the same support access
+// as the rest of this console.
+
+const QUESTION_TYPES = ['single_select', 'multi_select', 'slider'];
+
+function questionFieldsFromBody(body) {
+  const type = body.question_type;
+  const toInt = (v) => {
+    if (v === undefined || v === null || String(v).trim() === '') return null;
+    const n = parseInt(v, 10);
+    return Number.isNaN(n) ? null : n;
+  };
+  return {
+    questionText: (body.question_text || '').trim(),
+    questionType: type,
+    // Only the fields that belong to the chosen type are kept; a slider's
+    // labels have no meaning on a select, and vice versa.
+    maxSelections: type === 'multi_select' ? toInt(body.max_selections) : null,
+    sliderMin: type === 'slider' ? toInt(body.slider_min) : null,
+    sliderMax: type === 'slider' ? toInt(body.slider_max) : null,
+    sliderMinLabel: type === 'slider' ? (body.slider_min_label || '').trim() || null : null,
+    sliderMaxLabel: type === 'slider' ? (body.slider_max_label || '').trim() || null : null,
+  };
+}
+
+function validateQuestion(fields) {
+  if (!fields.questionText) return 'Question text is required.';
+  if (fields.questionText.length > 200) return 'Question text is too long.';
+  if (fields.questionType === 'slider') {
+    if (fields.sliderMin === null || fields.sliderMax === null) return 'A slider needs both a minimum and a maximum.';
+    if (fields.sliderMin >= fields.sliderMax) return 'Slider minimum must be lower than its maximum.';
+  }
+  if (fields.questionType === 'multi_select' && fields.maxSelections !== null && fields.maxSelections < 1) {
+    return 'Max selections must be at least 1.';
+  }
+  return null;
+}
+
+router.get(
+  '/questions',
+  wrap(async (req, res) => {
+    const questions = await q.listQuestions();
+    res.render('support/questions', { title: 'Check-in questions', questions });
+  }),
+);
+
+router.post(
+  '/questions',
+  wrap(async (req, res) => {
+    const fields = questionFieldsFromBody(req.body);
+    if (!QUESTION_TYPES.includes(fields.questionType)) {
+      req.setFlash({ type: 'error', message: 'Pick a question type.' });
+      return res.redirect('/support/questions');
+    }
+    const problem = validateQuestion(fields);
+    if (problem) {
+      req.setFlash({ type: 'error', message: problem });
+      return res.redirect('/support/questions');
+    }
+
+    const created = await q.createQuestion({ ...fields, createdBy: agentId(req) });
+    await q.logSupportAction({
+      adminId: agentId(req),
+      action: 'checkin_question.create',
+      targetTable: 'survey_questions',
+      targetId: created.id,
+      details: { question_text: fields.questionText, question_type: fields.questionType },
+    });
+
+    if (fields.questionType === 'slider') {
+      req.setFlash({ type: 'success', message: 'Question added and live from the next check-in.' });
+      return res.redirect('/support/questions');
+    }
+    // A select with no options is unanswerable, so go straight to where they
+    // get added rather than leaving a broken question in the list.
+    req.setFlash({ type: 'success', message: 'Question added — now give it some answer options.' });
+    res.redirect(`/support/questions/${created.id}`);
+  }),
+);
+
+router.get(
+  '/questions/:id',
+  wrap(async (req, res) => {
+    const question = await q.getQuestion(req.params.id);
+    if (!question) return res.status(404).render('errors/404', { layout: false, backHref: '/support/questions', backLabel: 'Back to questions' });
+    res.render('support/questionEdit', { title: 'Edit question', question });
+  }),
+);
+
+router.post(
+  '/questions/:id',
+  wrap(async (req, res) => {
+    const existing = await q.getQuestion(req.params.id);
+    if (!existing) return res.status(404).render('errors/404', { layout: false, backHref: '/support/questions', backLabel: 'Back to questions' });
+
+    // The stored type wins over anything posted — see updateQuestion's note
+    // on why type changes are not allowed.
+    const fields = questionFieldsFromBody({ ...req.body, question_type: existing.question_type });
+    const problem = validateQuestion(fields);
+    if (problem) {
+      req.setFlash({ type: 'error', message: problem });
+      return res.redirect(`/support/questions/${req.params.id}`);
+    }
+
+    await q.updateQuestion(req.params.id, fields);
+    await q.logSupportAction({
+      adminId: agentId(req),
+      action: 'checkin_question.update',
+      targetTable: 'survey_questions',
+      targetId: req.params.id,
+      details: { from: existing.question_text, to: fields.questionText },
+    });
+    req.setFlash({ type: 'success', message: 'Question updated.' });
+    res.redirect(`/support/questions/${req.params.id}`);
+  }),
+);
+
+router.post(
+  '/questions/:id/active',
+  wrap(async (req, res) => {
+    const active = req.body.active === 'true';
+    const updated = await q.setQuestionActive(req.params.id, active);
+    if (!updated) return res.status(404).render('errors/404', { layout: false, backHref: '/support/questions', backLabel: 'Back to questions' });
+    await q.logSupportAction({
+      adminId: agentId(req),
+      action: active ? 'checkin_question.activate' : 'checkin_question.retire',
+      targetTable: 'survey_questions',
+      targetId: req.params.id,
+    });
+    req.setFlash({
+      type: 'success',
+      message: active ? 'Question is live again.' : 'Question retired — existing answers are kept.',
+    });
+    res.redirect(req.body.redirect || '/support/questions');
+  }),
+);
+
+router.post(
+  '/questions/:id/move',
+  wrap(async (req, res) => {
+    await q.moveQuestion(req.params.id, req.body.direction === 'up' ? 'up' : 'down');
+    res.redirect('/support/questions');
+  }),
+);
+
+router.post(
+  '/questions/:id/options',
+  wrap(async (req, res) => {
+    const optionText = (req.body.option_text || '').trim();
+    if (!optionText) {
+      req.setFlash({ type: 'error', message: 'Option text is required.' });
+      return res.redirect(`/support/questions/${req.params.id}`);
+    }
+    const created = await q.addOption(req.params.id, { optionText, emoji: (req.body.emoji || '').trim() });
+    await q.logSupportAction({
+      adminId: agentId(req),
+      action: 'checkin_option.create',
+      targetTable: 'survey_question_options',
+      targetId: created.id,
+      details: { question_id: req.params.id, option_text: optionText },
+    });
+    res.redirect(`/support/questions/${req.params.id}`);
+  }),
+);
+
+router.post(
+  '/options/:optionId',
+  wrap(async (req, res) => {
+    const optionText = (req.body.option_text || '').trim();
+    if (!optionText) {
+      req.setFlash({ type: 'error', message: 'Option text is required.' });
+      return res.redirect(req.body.redirect || '/support/questions');
+    }
+    const updated = await q.updateOption(req.params.optionId, { optionText, emoji: (req.body.emoji || '').trim() });
+    if (!updated) return res.status(404).render('errors/404', { layout: false, backHref: '/support/questions', backLabel: 'Back to questions' });
+    await q.logSupportAction({
+      adminId: agentId(req),
+      action: 'checkin_option.update',
+      targetTable: 'survey_question_options',
+      targetId: req.params.optionId,
+      details: { option_text: optionText },
+    });
+    res.redirect(`/support/questions/${updated.question_id}`);
+  }),
+);
+
+router.post(
+  '/options/:optionId/active',
+  wrap(async (req, res) => {
+    const active = req.body.active === 'true';
+    const updated = await q.setOptionActive(req.params.optionId, active);
+    if (!updated) return res.status(404).render('errors/404', { layout: false, backHref: '/support/questions', backLabel: 'Back to questions' });
+    await q.logSupportAction({
+      adminId: agentId(req),
+      action: active ? 'checkin_option.activate' : 'checkin_option.retire',
+      targetTable: 'survey_question_options',
+      targetId: req.params.optionId,
+    });
+    res.redirect(`/support/questions/${updated.question_id}`);
+  }),
+);
+
+router.post(
+  '/options/:optionId/delete',
+  wrap(async (req, res) => {
+    const result = await q.deleteOptionIfUnused(req.params.optionId);
+    if (result.reason === 'not_found') {
+      return res.status(404).render('errors/404', { layout: false, backHref: '/support/questions', backLabel: 'Back to questions' });
+    }
+    if (!result.deleted) {
+      req.setFlash({
+        type: 'error',
+        message: `That option has been chosen ${result.useCount} time(s) — retire it instead so past answers still make sense.`,
+      });
+      return res.redirect(`/support/questions/${result.questionId}`);
+    }
+    await q.logSupportAction({
+      adminId: agentId(req),
+      action: 'checkin_option.delete',
+      targetTable: 'survey_question_options',
+      targetId: req.params.optionId,
+      details: { question_id: result.questionId },
+    });
+    req.setFlash({ type: 'success', message: 'Option deleted.' });
+    res.redirect(`/support/questions/${result.questionId}`);
+  }),
+);
+
 // --------------------------------------------------------------- clients ---
 
 router.get(

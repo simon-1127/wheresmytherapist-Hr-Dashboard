@@ -4,6 +4,12 @@ const { requireSuperAdmin } = require('../middleware/auth');
 const { logAction } = require('../lib/audit');
 const { generateTempPassword } = require('../lib/passwords');
 const { sendMail } = require('../config/mailer');
+const {
+  preflightUpgrade,
+  upgradeToProvider,
+  preflightRevert,
+  revertToClient,
+} = require('../lib/providerUpgrade');
 
 const router = express.Router();
 router.use(requireSuperAdmin);
@@ -15,6 +21,157 @@ const ASSIGNABLE_ROLES = ['support_agent', 'content_moderator', 'finance'];
 
 router.get('/', (req, res) => {
   res.render('onboarding/index', { result: null });
+});
+
+// ---------- Upgrade an existing account to a provider ----------
+// The other provider route below creates a brand new account. This is the
+// case that previously required hand-written SQL: someone already signed up
+// as a client (often a therapist who downloaded the app before there was a
+// provider signup) who needs to become a provider without losing their
+// login.
+
+router.get('/upgrade', async (req, res) => {
+  const search = (req.query.search || '').trim();
+  let candidates = [];
+
+  if (search) {
+    // Two lookups because the name lives in client_profiles while the email
+    // and phone live in users; results are merged and de-duplicated on id.
+    const [{ data: byContact }, { data: byName }] = await Promise.all([
+      supabase
+        .from('users')
+        .select('id, email, phone, role, status, created_at')
+        .eq('role', 'client')
+        .is('deleted_at', null)
+        .or(`email.ilike.%${search}%,phone.ilike.%${search}%`)
+        .limit(25),
+      supabase
+        .from('client_profiles')
+        .select('user_id, full_name, subscription_tier')
+        .ilike('full_name', `%${search}%`)
+        .limit(25),
+    ]);
+
+    const ids = new Set();
+    (byContact || []).forEach((u) => ids.add(u.id));
+    (byName || []).forEach((c) => ids.add(c.user_id));
+
+    if (ids.size) {
+      const [{ data: users }, { data: profiles }] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, email, phone, role, status, created_at')
+          .in('id', [...ids])
+          .is('deleted_at', null),
+        supabase.from('client_profiles').select('user_id, full_name, subscription_tier').in('user_id', [...ids]),
+      ]);
+      const profileById = {};
+      (profiles || []).forEach((c) => (profileById[c.user_id] = c));
+      candidates = (users || []).map((u) => ({ ...u, profile: profileById[u.id] || null }));
+    }
+  }
+
+  res.render('onboarding/upgrade', { search, candidates });
+});
+
+router.get('/upgrade/:userId', async (req, res) => {
+  const check = await preflightUpgrade(supabase, req.params.userId);
+  if (!check.user) return res.status(404).render('errors/404', { layout: false });
+
+  // Already a provider sitting on an untouched draft — offer the undo
+  // instead of an upgrade that can't happen.
+  let revert = null;
+  if (check.user.role === 'provider') {
+    revert = await preflightRevert(supabase, req.params.userId);
+  }
+
+  res.render('onboarding/upgradeReview', { check, revert });
+});
+
+router.post('/upgrade/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const { full_name: fullNameInput, acknowledge } = req.body;
+
+  // Re-run the checks at submit time rather than trusting the page the
+  // admin was looking at — it may be minutes old, and a session could have
+  // been booked in between.
+  const check = await preflightUpgrade(supabase, userId);
+  if (!check.user) return res.status(404).render('errors/404', { layout: false });
+
+  if (check.blockers.length) {
+    req.setFlash({ type: 'error', message: `Cannot upgrade: ${check.blockers[0]}` });
+    return res.redirect(`/onboarding/upgrade/${userId}`);
+  }
+  if (check.warnings.length && acknowledge !== 'on') {
+    req.setFlash({ type: 'error', message: 'Tick the acknowledgement box to continue.' });
+    return res.redirect(`/onboarding/upgrade/${userId}`);
+  }
+
+  const fullName = (fullNameInput || '').trim() || (check.clientProfile && check.clientProfile.full_name) || 'Not yet provided';
+
+  const result = await upgradeToProvider(supabase, { userId, fullName });
+  if (!result.ok) {
+    console.error('[onboarding] provider upgrade failed at', result.stage, result.message);
+    req.setFlash({ type: 'error', message: `Upgrade failed (${result.stage}) — ${result.message}` });
+    return res.redirect(`/onboarding/upgrade/${userId}`);
+  }
+
+  await logAction({
+    adminId: req.session.superAdmin.id,
+    action: 'onboarding.provider.upgraded_from_client',
+    targetTable: 'provider_profiles',
+    targetId: userId,
+    details: {
+      previous_role: check.user.role,
+      email: check.user.email,
+      warnings: check.warnings,
+      notes: check.notes,
+    },
+  });
+
+  try {
+    await sendMail({
+      to: check.user.email,
+      subject: "Provider access enabled — Where's My Therapist",
+      html: `<p>Your existing account (<strong>${check.user.email}</strong>) now has provider access.</p>
+        <p>Sign in with the same password you already use — nothing about your login has changed.
+        You'll be asked to complete your provider profile, and it'll be reviewed once you submit it.</p>`,
+    });
+  } catch (err) {
+    console.error('[onboarding] provider upgrade email failed:', err);
+  }
+
+  req.setFlash({
+    type: 'success',
+    message: `${fullName} is now a provider. They keep their existing login and will be prompted to complete their profile.`,
+  });
+  res.redirect('/providers?status=all');
+});
+
+router.post('/upgrade/:userId/revert', async (req, res) => {
+  const { userId } = req.params;
+  const revert = await preflightRevert(supabase, userId);
+
+  if (revert.blockers.length) {
+    req.setFlash({ type: 'error', message: `Cannot revert: ${revert.blockers[0]}` });
+    return res.redirect(`/onboarding/upgrade/${userId}`);
+  }
+
+  const result = await revertToClient(supabase, userId);
+  if (!result.ok) {
+    req.setFlash({ type: 'error', message: `Revert failed (${result.stage}) — ${result.message}` });
+    return res.redirect(`/onboarding/upgrade/${userId}`);
+  }
+
+  await logAction({
+    adminId: req.session.superAdmin.id,
+    action: 'onboarding.provider.reverted_to_client',
+    targetTable: 'users',
+    targetId: userId,
+  });
+
+  req.setFlash({ type: 'success', message: 'Reverted to client.' });
+  res.redirect(`/onboarding/upgrade/${userId}`);
 });
 
 // ---------- WMT team members ----------

@@ -196,8 +196,9 @@ router.post('/support/login', async (req, res) => {
 });
 
 router.post('/support/logout', (req, res) => {
+  const wasSuperAdmin = Boolean(req.session && req.session.superAdmin);
   req.session = null;
-  res.redirect('/support/login');
+  res.redirect(wasSuperAdmin ? '/login' : '/support/login');
 });
 
 module.exports = router;

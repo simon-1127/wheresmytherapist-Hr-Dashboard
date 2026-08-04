@@ -1,0 +1,155 @@
+<div class="support-head">
+  <div>
+    <h1>Check-in questions</h1>
+    <div class="support-note">This is the daily check-in every client answers. Changes apply from their next check-in.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="support-cardhead"><h2>Live questions</h2></div>
+  <% const live = questions.filter(q => q.is_active); %>
+  <% if (!live.length) { %>
+    <div class="empty-state">No active questions — clients currently have nothing to answer.</div>
+  <% } else { %>
+    <div class="support-scroll">
+      <table>
+        <thead><tr><th>Order</th><th>Question</th><th>Type</th><th>Options</th><th>Answers</th><th></th></tr></thead>
+        <tbody>
+          <% live.forEach((qq, i) => { %>
+            <tr>
+              <td style="white-space:nowrap;">
+                <div class="support-row" style="flex-wrap:nowrap;">
+                  <form method="POST" action="/support/questions/<%= qq.id %>/move">
+                    <input type="hidden" name="direction" value="up" />
+                    <button class="btn btn-secondary btn-sm" type="submit" <%= i === 0 ? 'disabled' : '' %> title="Move up">↑</button>
+                  </form>
+                  <form method="POST" action="/support/questions/<%= qq.id %>/move">
+                    <input type="hidden" name="direction" value="down" />
+                    <button class="btn btn-secondary btn-sm" type="submit" <%= i === live.length - 1 ? 'disabled' : '' %> title="Move down">↓</button>
+                  </form>
+                </div>
+              </td>
+              <td>
+                <a href="/support/questions/<%= qq.id %>"><%= qq.question_text %></a>
+                <% if (qq.question_type === 'slider') { %>
+                  <div class="support-note"><%= qq.slider_min_label || qq.slider_min %> → <%= qq.slider_max_label || qq.slider_max %> (<%= qq.slider_min %>–<%= qq.slider_max %>)</div>
+                <% } %>
+              </td>
+              <td><span class="badge badge-info"><%= qq.question_type.replace('_', ' ') %></span></td>
+              <td>
+                <% if (qq.question_type === 'slider') { %>
+                  <span class="support-note">—</span>
+                <% } else if (!qq.option_count) { %>
+                  <span class="badge badge-danger">none yet</span>
+                <% } else { %>
+                  <%= qq.option_count %>
+                <% } %>
+              </td>
+              <td class="support-note"><%= qq.answer_count %></td>
+              <td style="white-space:nowrap;">
+                <div class="support-row" style="flex-wrap:nowrap;">
+                  <a class="btn btn-secondary btn-sm" href="/support/questions/<%= qq.id %>">Edit</a>
+                  <form method="POST" action="/support/questions/<%= qq.id %>/active"
+                        onsubmit="return confirm('Retire this question? Clients stop seeing it; past answers are kept.');">
+                    <input type="hidden" name="active" value="false" />
+                    <button class="btn btn-danger btn-sm" type="submit">Retire</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+
+<% const retired = questions.filter(q => !q.is_active); %>
+<% if (retired.length) { %>
+  <div class="card" style="margin-top:16px;">
+    <div class="support-cardhead"><h2>Retired</h2></div>
+    <p class="support-note">Not shown to clients. Kept because their past answers still reference them.</p>
+    <div class="support-scroll">
+      <table>
+        <thead><tr><th>Question</th><th>Type</th><th>Answers</th><th>Retired</th><th></th></tr></thead>
+        <tbody>
+          <% retired.forEach(qq => { %>
+            <tr>
+              <td><a href="/support/questions/<%= qq.id %>"><%= qq.question_text %></a></td>
+              <td><span class="badge badge-neutral"><%= qq.question_type.replace('_', ' ') %></span></td>
+              <td class="support-note"><%= qq.answer_count %></td>
+              <td class="support-note"><%= qq.deactivated_at ? new Date(qq.deactivated_at).toLocaleDateString() : '—' %></td>
+              <td>
+                <form method="POST" action="/support/questions/<%= qq.id %>/active">
+                  <input type="hidden" name="active" value="true" />
+                  <button class="btn btn-secondary btn-sm" type="submit">Restore</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<% } %>
+
+<div class="card" style="margin-top:16px;">
+  <div class="support-cardhead"><h2>Add a question</h2></div>
+  <form method="POST" action="/support/questions">
+    <div class="field">
+      <label for="question_text">Question</label>
+      <input type="text" id="question_text" name="question_text" maxlength="200" required
+             placeholder="How would you rate your stress level today?" style="width:100%;" />
+    </div>
+
+    <div class="field">
+      <label for="question_type">Type</label>
+      <select id="question_type" name="question_type" required onchange="toggleQType(this.value)">
+        <option value="single_select">Single select — one option</option>
+        <option value="multi_select">Multi select — several options</option>
+        <option value="slider">Slider — a number on a scale</option>
+      </select>
+      <div class="support-note">Type can't be changed later, because past answers are stored in the shape it defines.</div>
+    </div>
+
+    <div id="qtype-multi" style="display:none;">
+      <div class="field">
+        <label for="max_selections">Max selections</label>
+        <input type="number" id="max_selections" name="max_selections" min="1" value="3" style="width:120px;" />
+      </div>
+    </div>
+
+    <div id="qtype-slider" style="display:none;">
+      <div class="support-cols">
+        <div class="field">
+          <label for="slider_min">Minimum</label>
+          <input type="number" id="slider_min" name="slider_min" value="1" />
+        </div>
+        <div class="field">
+          <label for="slider_max">Maximum</label>
+          <input type="number" id="slider_max" name="slider_max" value="10" />
+        </div>
+      </div>
+      <div class="support-cols">
+        <div class="field">
+          <label for="slider_min_label">Label at the low end</label>
+          <input type="text" id="slider_min_label" name="slider_min_label" placeholder="Very low" />
+        </div>
+        <div class="field">
+          <label for="slider_max_label">Label at the high end</label>
+          <input type="text" id="slider_max_label" name="slider_max_label" placeholder="Extremely high" />
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Add question</button>
+    <div class="support-note" style="margin-top:8px;">Select questions need answer options — you'll be taken there next.</div>
+  </form>
+</div>
+
+<script>
+  function toggleQType(v) {
+    document.getElementById('qtype-multi').style.display = v === 'multi_select' ? 'block' : 'none';
+    document.getElementById('qtype-slider').style.display = v === 'slider' ? 'block' : 'none';
+  }
+</script>

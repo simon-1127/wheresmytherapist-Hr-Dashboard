@@ -430,6 +430,195 @@ function summarizeMetrics({ series, history, journalTags }) {
   return metrics;
 }
 
+// ------------------------------------------------- check-in questions ---
+// The daily check-in survey IS the mood tracking instrument, so editing it
+// is editing what the app asks every client tomorrow morning.
+//
+// Two rules shape everything below:
+//  1. Questions are never deleted. survey_answers.question_id has a foreign
+//     key to survey_questions(id) with no cascade, so a delete would either
+//     fail or (worse, if forced) strand months of answers. Deactivating is
+//     the retirement mechanism.
+//  2. Options are only deleted when nothing has ever selected them.
+//     survey_answers.selected_option_ids is a plain uuid[] with no foreign
+//     key, so a delete would silently succeed and leave historical answers
+//     pointing at an id that no longer resolves to any text.
+
+async function listQuestions() {
+  const { rows } = await query(
+    `SELECT q.id, q.question_text, q.question_type::text AS question_type,
+            q.order_index, q.max_selections, q.slider_min, q.slider_max,
+            q.slider_min_label, q.slider_max_label, q.is_active,
+            q.created_at, q.deactivated_at,
+            (SELECT COUNT(*)::int FROM survey_question_options o
+              WHERE o.question_id = q.id AND o.is_active) AS option_count,
+            (SELECT COUNT(*)::int FROM survey_answers a
+              WHERE a.question_id = q.id) AS answer_count
+       FROM survey_questions q
+      ORDER BY q.is_active DESC, q.order_index ASC, q.created_at ASC`,
+  );
+  return rows;
+}
+
+async function getQuestion(questionId) {
+  const { rows } = await query(
+    `SELECT q.id, q.question_text, q.question_type::text AS question_type,
+            q.order_index, q.max_selections, q.slider_min, q.slider_max,
+            q.slider_min_label, q.slider_max_label, q.is_active,
+            q.created_at, q.deactivated_at,
+            (SELECT COUNT(*)::int FROM survey_answers a WHERE a.question_id = q.id) AS answer_count
+       FROM survey_questions q WHERE q.id = $1`,
+    [questionId],
+  );
+  if (!rows[0]) return null;
+
+  const { rows: options } = await query(
+    `SELECT o.id, o.option_text, o.emoji, o.order_index, o.is_active,
+            (SELECT COUNT(*)::int FROM survey_answers a
+              WHERE a.selected_option_ids @> ARRAY[o.id]) AS use_count
+       FROM survey_question_options o
+      WHERE o.question_id = $1
+      ORDER BY o.is_active DESC, o.order_index ASC`,
+    [questionId],
+  );
+  return { ...rows[0], options };
+}
+
+async function createQuestion(fields) {
+  const { rows: maxRow } = await query(
+    'SELECT COALESCE(MAX(order_index), 0) + 1 AS next FROM survey_questions',
+  );
+  const { rows } = await query(
+    `INSERT INTO survey_questions
+       (question_text, question_type, order_index, max_selections,
+        slider_min, slider_max, slider_min_label, slider_max_label,
+        is_active, created_by)
+     VALUES ($1, $2::question_type, $3, $4, $5, $6, $7, $8, true, $9::uuid)
+     RETURNING id`,
+    [
+      fields.questionText, fields.questionType, maxRow[0].next,
+      fields.maxSelections, fields.sliderMin, fields.sliderMax,
+      fields.sliderMinLabel, fields.sliderMaxLabel, fields.createdBy,
+    ],
+  );
+  return rows[0];
+}
+
+/**
+ * Wording and labels only. question_type is deliberately not editable:
+ * flipping a slider into a select would leave every historical answer with
+ * a slider_value the new shape cannot interpret. Retire it and add a new
+ * one instead.
+ */
+async function updateQuestion(questionId, fields) {
+  const { rows } = await query(
+    `UPDATE survey_questions
+        SET question_text = $2,
+            max_selections = $3,
+            slider_min = $4,
+            slider_max = $5,
+            slider_min_label = $6,
+            slider_max_label = $7
+      WHERE id = $1
+      RETURNING id`,
+    [
+      questionId, fields.questionText, fields.maxSelections,
+      fields.sliderMin, fields.sliderMax,
+      fields.sliderMinLabel, fields.sliderMaxLabel,
+    ],
+  );
+  return rows[0] || null;
+}
+
+async function setQuestionActive(questionId, active) {
+  const { rows } = await query(
+    `UPDATE survey_questions
+        SET is_active = $2,
+            deactivated_at = CASE WHEN $2 THEN NULL ELSE COALESCE(deactivated_at, now()) END
+      WHERE id = $1
+      RETURNING id, is_active`,
+    [questionId, active],
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Swaps order_index with the adjacent active question. Two statements rather
+ * than one clever UPDATE ... FROM, because order_index has no unique
+ * constraint and a swap through a temporary value would be pointless here.
+ */
+async function moveQuestion(questionId, direction) {
+  const { rows: self } = await query(
+    'SELECT id, order_index FROM survey_questions WHERE id = $1',
+    [questionId],
+  );
+  if (!self[0]) return null;
+
+  const cmp = direction === 'up' ? '<' : '>';
+  const dir = direction === 'up' ? 'DESC' : 'ASC';
+  const { rows: neighbour } = await query(
+    `SELECT id, order_index FROM survey_questions
+      WHERE is_active AND order_index ${cmp} $1
+      ORDER BY order_index ${dir} LIMIT 1`,
+    [self[0].order_index],
+  );
+  if (!neighbour[0]) return { moved: false };
+
+  await query('UPDATE survey_questions SET order_index = $2 WHERE id = $1', [self[0].id, neighbour[0].order_index]);
+  await query('UPDATE survey_questions SET order_index = $2 WHERE id = $1', [neighbour[0].id, self[0].order_index]);
+  return { moved: true };
+}
+
+async function addOption(questionId, { optionText, emoji }) {
+  const { rows: maxRow } = await query(
+    'SELECT COALESCE(MAX(order_index), 0) + 1 AS next FROM survey_question_options WHERE question_id = $1',
+    [questionId],
+  );
+  const { rows } = await query(
+    `INSERT INTO survey_question_options (question_id, option_text, emoji, order_index, is_active)
+     VALUES ($1, $2, NULLIF($3, ''), $4, true)
+     RETURNING id`,
+    [questionId, optionText, emoji || '', maxRow[0].next],
+  );
+  return rows[0];
+}
+
+async function updateOption(optionId, { optionText, emoji }) {
+  const { rows } = await query(
+    `UPDATE survey_question_options
+        SET option_text = $2, emoji = NULLIF($3, '')
+      WHERE id = $1
+      RETURNING id, question_id`,
+    [optionId, optionText, emoji || ''],
+  );
+  return rows[0] || null;
+}
+
+async function setOptionActive(optionId, active) {
+  const { rows } = await query(
+    'UPDATE survey_question_options SET is_active = $2 WHERE id = $1 RETURNING id, question_id',
+    [optionId, active],
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Only removes an option nothing has ever selected. Anything with history
+ * gets deactivated instead, so old answers still resolve to their text.
+ */
+async function deleteOptionIfUnused(optionId) {
+  const { rows: use } = await query(
+    `SELECT (SELECT COUNT(*)::int FROM survey_answers a WHERE a.selected_option_ids @> ARRAY[$1::uuid]) AS use_count,
+            (SELECT question_id FROM survey_question_options WHERE id = $1) AS question_id`,
+    [optionId],
+  );
+  if (!use[0] || !use[0].question_id) return { deleted: false, reason: 'not_found' };
+  if (use[0].use_count > 0) return { deleted: false, reason: 'in_use', questionId: use[0].question_id, useCount: use[0].use_count };
+
+  await query('DELETE FROM survey_question_options WHERE id = $1', [optionId]);
+  return { deleted: true, questionId: use[0].question_id };
+}
+
 module.exports = {
   logSupportAction,
   listAlerts,
@@ -449,4 +638,14 @@ module.exports = {
   createWellnessReport,
   setReportVisibility,
   summarizeMetrics,
+  listQuestions,
+  getQuestion,
+  createQuestion,
+  updateQuestion,
+  setQuestionActive,
+  moveQuestion,
+  addOption,
+  updateOption,
+  setOptionActive,
+  deleteOptionIfUnused,
 };

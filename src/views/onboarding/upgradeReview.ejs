@@ -1,0 +1,111 @@
+<div class="topbar">
+  <div>
+    <h1><%= check.clientProfile ? check.clientProfile.full_name : (check.user.email || 'User') %></h1>
+    <div class="subtitle">
+      <span class="badge badge-info"><%= check.user.role %></span>
+      <span class="badge <%= check.user.status === 'active' ? 'badge-success' : 'badge-warn' %>"><%= check.user.status %></span>
+      <% if (check.age !== null) { %><span class="badge badge-neutral"><%= check.age %> yrs</span><% } %>
+    </div>
+  </div>
+  <a class="btn btn-secondary" href="/onboarding/upgrade">Back to search</a>
+</div>
+
+<div class="grid grid-2col">
+  <div class="card">
+    <div class="card-header"><h2>Account</h2></div>
+    <table>
+      <tr><td class="muted">Email</td><td><%= check.user.email || '—' %></td></tr>
+      <tr><td class="muted">Phone</td><td><%= check.user.phone || '—' %></td></tr>
+      <tr><td class="muted">Joined</td><td><%= new Date(check.user.created_at).toLocaleDateString() %></td></tr>
+      <% if (check.clientProfile) { %>
+        <tr><td class="muted">Tier</td><td><span class="badge badge-info"><%= check.clientProfile.subscription_tier %></span></td></tr>
+        <tr><td class="muted">Language</td><td><%= check.clientProfile.preferred_language || '—' %></td></tr>
+      <% } %>
+      <tr><td class="muted">Sessions as client</td><td><%= check.counts.pastSessions %> total, <%= check.counts.upcomingSessions %> upcoming</td></tr>
+      <% if (check.orgLink) { %>
+        <tr><td class="muted">Organization</td><td><%= check.orgLink.organizations ? check.orgLink.organizations.company_name : check.orgLink.org_id %></td></tr>
+      <% } %>
+      <tr><td class="muted">Full profile</td><td><a href="/users/<%= check.user.id %>">Open user record</a></td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Checks</h2></div>
+
+    <% if (check.blockers.length) { %>
+      <div class="small" style="font-weight:600; margin-bottom:6px;">Blocking</div>
+      <ul style="margin:0 0 14px 18px;">
+        <% check.blockers.forEach(b => { %><li class="small" style="color:#b91c1c; margin-bottom:4px;"><%= b %></li><% }) %>
+      </ul>
+    <% } %>
+
+    <% if (check.warnings.length) { %>
+      <div class="small" style="font-weight:600; margin-bottom:6px;">Worth knowing</div>
+      <ul style="margin:0 0 14px 18px;">
+        <% check.warnings.forEach(w => { %><li class="small muted" style="margin-bottom:4px;"><%= w %></li><% }) %>
+      </ul>
+    <% } %>
+
+    <% if (check.notes.length) { %>
+      <div class="small" style="font-weight:600; margin-bottom:6px;">Always true of an upgrade</div>
+      <ul style="margin:0 0 4px 18px;">
+        <% check.notes.forEach(n => { %><li class="small muted" style="margin-bottom:4px;"><%= n %></li><% }) %>
+      </ul>
+    <% } %>
+
+    <% if (!check.blockers.length && !check.warnings.length && !check.notes.length) { %>
+      <div class="empty-state small">Nothing flagged.</div>
+    <% } %>
+  </div>
+</div>
+
+<% if (!check.blockers.length) { %>
+  <div class="card" style="margin-top:16px;">
+    <div class="card-header"><h2>Upgrade to provider</h2></div>
+    <form method="POST" action="/onboarding/upgrade/<%= check.user.id %>"
+          onsubmit="return confirm('Make this account a provider? They will be routed to the provider side of the app on next login.');">
+      <div class="field">
+        <label for="full_name">Provider display name</label>
+        <input type="text" id="full_name" name="full_name"
+               value="<%= check.clientProfile ? check.clientProfile.full_name : '' %>" required />
+        <div class="small muted">Pre-filled from their client profile. They can change it when completing their provider profile.</div>
+      </div>
+
+      <% if (check.warnings.length) { %>
+        <label class="small" style="display:flex; align-items:flex-start; gap:8px; margin-bottom:14px;">
+          <input type="checkbox" name="acknowledge" style="width:auto; margin-top:3px;" />
+          <span>I've read the points above and want to upgrade this account anyway.</span>
+        </label>
+      <% } %>
+
+      <button class="btn btn-primary" type="submit">Upgrade to provider</button>
+    </form>
+
+    <div class="small muted" style="margin-top:12px;">
+      They keep their existing email and password. A draft provider profile is created and they're
+      prompted to complete it in the app; it reaches the review queue only once they submit it.
+      Their client records are retained in the database but stop being reachable from their account.
+    </div>
+  </div>
+<% } %>
+
+<% if (revert) { %>
+  <div class="card" style="margin-top:16px;">
+    <div class="card-header"><h2>Revert to client</h2></div>
+    <% if (revert.blockers.length) { %>
+      <div class="small muted" style="margin-bottom:8px;">This account can no longer be reverted from here:</div>
+      <ul style="margin:0 0 0 18px;">
+        <% revert.blockers.forEach(b => { %><li class="small muted" style="margin-bottom:4px;"><%= b %></li><% }) %>
+      </ul>
+    <% } else { %>
+      <p class="small muted">
+        This provider hasn't done anything yet — no availability, sessions, payouts, or submitted
+        application. The draft provider profile can be removed and the account returned to the client side.
+      </p>
+      <form method="POST" action="/onboarding/upgrade/<%= check.user.id %>/revert"
+            onsubmit="return confirm('Revert this account to a client and delete the draft provider profile?');">
+        <button class="btn btn-danger" type="submit">Revert to client</button>
+      </form>
+    <% } %>
+  </div>
+<% } %>

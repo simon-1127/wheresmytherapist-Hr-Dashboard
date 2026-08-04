@@ -87,6 +87,33 @@
 
     .support-note { font-size: 12px; color: #6b7280; }
 
+
+    /* Emoji picker */
+    .emoji-field { display: flex; align-items: center; gap: 6px; }
+    .emoji-field input[type="text"] { width: 64px; text-align: center; font-size: 18px; }
+    .emoji-trigger {
+      border: 1px solid #e5e7eb; background: #fff; border-radius: 8px;
+      padding: 6px 9px; font-size: 15px; cursor: pointer; line-height: 1;
+    }
+    .emoji-trigger:hover { background: #f9fafb; }
+    .emoji-pop {
+      position: absolute; z-index: 60; width: 268px; max-height: 232px; overflow-y: auto;
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.12); padding: 8px;
+    }
+    .emoji-pop-group { font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+      color: #9ca3af; margin: 6px 0 4px 4px; }
+    .emoji-pop-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+    .emoji-pop button {
+      border: 0; background: transparent; font-size: 19px; line-height: 1;
+      padding: 4px 0; border-radius: 6px; cursor: pointer;
+    }
+    .emoji-pop button:hover { background: #eef2ff; }
+    .emoji-pop .emoji-clear {
+      width: 100%; margin-top: 6px; font-size: 12px; color: #6b7280;
+      border-top: 1px solid #f3f4f6; padding-top: 6px;
+    }
+
     @media (max-width: 900px) {
       .support-cols { grid-template-columns: 1fr; }
       .support-main { padding: 16px; }
@@ -111,17 +138,14 @@
             Crisis alerts<% if (typeof navCounts !== 'undefined' && navCounts.new) { %><span class="count"><%= navCounts.new %></span><% } %>
           </a>
           <a class="<%= path.startsWith('/support/clients') ? 'is-active' : '' %>" href="/support/clients">Clients</a>
+          <a class="<%= path.startsWith('/support/questions') || path.startsWith('/support/options') ? 'is-active' : '' %>" href="/support/questions">Check-in questions</a>
         </nav>
       </div>
       <div class="support-bar-right">
         <span class="support-email"><%= typeof agent !== 'undefined' && agent ? agent.email : '' %></span>
-        <% if (typeof viewerIsSuperAdmin !== 'undefined' && viewerIsSuperAdmin) { %>
-          <a class="btn btn-secondary btn-sm" href="/">Back to admin</a>
-        <% } else { %>
-          <form method="POST" action="/support/logout">
-            <button class="btn btn-secondary btn-sm" type="submit">Log out</button>
-          </form>
-        <% } %>
+        <form method="POST" action="/support/logout">
+          <button class="btn btn-secondary btn-sm" type="submit">Log out</button>
+        </form>
       </div>
     </header>
 
@@ -132,5 +156,73 @@
       <%- body %>
     </main>
   </div>
+
+  <script>
+    // Emoji palette for the check-in question editor. Deliberately curated
+    // and offline — a full picker library would be a lot of weight for a
+    // field that only ever needs a mood face.
+    (function () {
+      var GROUPS = [
+        ['Mood', ['\u{1F600}','\u{1F642}','\u{1F60A}','\u{1F60C}','\u{1F970}','\u{1F929}','\u{1F60D}','\u{1F917}',
+                  '\u{1F610}','\u{1F614}','\u{1F615}','\u{1F641}','\u{2639}\u{FE0F}','\u{1F62B}','\u{1F625}','\u{1F622}',
+                  '\u{1F62D}','\u{1F630}','\u{1F628}','\u{1F631}','\u{1F620}','\u{1F621}','\u{1F644}','\u{1F62C}',
+                  '\u{1F971}','\u{1F634}','\u{1F92F}','\u{1F975}','\u{1F976}','\u{1F912}','\u{1F915}','\u{1F927}']],
+        ['Energy & body', ['\u{26A1}','\u{1F525}','\u{1F31E}','\u{1F327}\u{FE0F}','\u{1F319}','\u{2601}\u{FE0F}','\u{1F308}','\u{2728}',
+                  '\u{1F9E0}','\u{2764}\u{FE0F}','\u{1F494}','\u{1F4AA}','\u{1F6CC}','\u{1F6B6}','\u{1F3C3}','\u{1F9D8}',
+                  '\u{1F35C}','\u{1F957}','\u{1F4A7}','\u{2615}']],
+        ['Signals', ['\u{1F44D}','\u{1F44E}','\u{2705}','\u{274C}','\u{2B50}','\u{1F3AF}','\u{1F4C8}','\u{1F4C9}',
+                  '\u{1F195}','\u{2757}','\u{2753}','\u{1F4AC}','\u{1F4DD}','\u{1F514}','\u{1F464}','\u{1F46A}']]
+      ];
+      var pop = null;
+
+      function close() { if (pop) { pop.remove(); pop = null; } }
+
+      function open(trigger) {
+        close();
+        var targetId = trigger.getAttribute('data-emoji-target');
+        var input = document.getElementById(targetId);
+        if (!input) return;
+
+        pop = document.createElement('div');
+        pop.className = 'emoji-pop';
+        GROUPS.forEach(function (g) {
+          var label = document.createElement('div');
+          label.className = 'emoji-pop-group';
+          label.textContent = g[0];
+          pop.appendChild(label);
+          var grid = document.createElement('div');
+          grid.className = 'emoji-pop-grid';
+          g[1].forEach(function (e) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = e;
+            b.addEventListener('click', function () { input.value = e; close(); });
+            grid.appendChild(b);
+          });
+          pop.appendChild(grid);
+        });
+        var clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'emoji-clear';
+        clear.textContent = 'No emoji';
+        clear.addEventListener('click', function () { input.value = ''; close(); });
+        pop.appendChild(clear);
+
+        document.body.appendChild(pop);
+        var r = trigger.getBoundingClientRect();
+        var top = r.bottom + window.scrollY + 6;
+        var left = Math.min(r.left + window.scrollX, window.innerWidth - 280);
+        pop.style.top = top + 'px';
+        pop.style.left = Math.max(8, left) + 'px';
+      }
+
+      document.addEventListener('click', function (ev) {
+        var trigger = ev.target.closest('.emoji-trigger');
+        if (trigger) { ev.preventDefault(); open(trigger); return; }
+        if (pop && !ev.target.closest('.emoji-pop')) close();
+      });
+      document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
+    })();
+  </script>
 </body>
 </html>

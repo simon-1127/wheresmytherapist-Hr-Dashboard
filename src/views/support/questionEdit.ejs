@@ -1,0 +1,139 @@
+<div class="support-head">
+  <div>
+    <h1>Edit question</h1>
+    <div class="meta">
+      <span class="badge badge-info"><%= question.question_type.replace('_', ' ') %></span>
+      <span class="badge <%= question.is_active ? 'badge-success' : 'badge-neutral' %>"><%= question.is_active ? 'live' : 'retired' %></span>
+      <span class="badge badge-neutral"><%= question.answer_count %> answers on record</span>
+    </div>
+  </div>
+  <a class="btn btn-secondary btn-sm" href="/support/questions">Back to questions</a>
+</div>
+
+<div class="card">
+  <div class="support-cardhead"><h2>Wording</h2></div>
+  <form method="POST" action="/support/questions/<%= question.id %>">
+    <div class="field">
+      <label for="question_text">Question</label>
+      <input type="text" id="question_text" name="question_text" maxlength="200" required
+             value="<%= question.question_text %>" style="width:100%;" />
+      <div class="support-note">Safe to fix typos. Rewording it to mean something different will make old answers misleading — retire it and add a new one instead.</div>
+    </div>
+
+    <% if (question.question_type === 'multi_select') { %>
+      <div class="field">
+        <label for="max_selections">Max selections</label>
+        <input type="number" id="max_selections" name="max_selections" min="1" style="width:120px;"
+               value="<%= question.max_selections === null ? '' : question.max_selections %>" />
+      </div>
+    <% } %>
+
+    <% if (question.question_type === 'slider') { %>
+      <div class="support-cols">
+        <div class="field">
+          <label for="slider_min">Minimum</label>
+          <input type="number" id="slider_min" name="slider_min" value="<%= question.slider_min %>" required />
+        </div>
+        <div class="field">
+          <label for="slider_max">Maximum</label>
+          <input type="number" id="slider_max" name="slider_max" value="<%= question.slider_max %>" required />
+        </div>
+      </div>
+      <div class="support-cols">
+        <div class="field">
+          <label for="slider_min_label">Label at the low end</label>
+          <input type="text" id="slider_min_label" name="slider_min_label" value="<%= question.slider_min_label || '' %>" />
+        </div>
+        <div class="field">
+          <label for="slider_max_label">Label at the high end</label>
+          <input type="text" id="slider_max_label" name="slider_max_label" value="<%= question.slider_max_label || '' %>" />
+        </div>
+      </div>
+      <% if (question.answer_count) { %>
+        <div class="support-note" style="margin-bottom:12px;">
+          Changing the range after <%= question.answer_count %> answers rescales the trend chart — older values were recorded against the old range.
+        </div>
+      <% } %>
+    <% } %>
+
+    <button class="btn btn-primary" type="submit">Save changes</button>
+  </form>
+</div>
+
+<% if (question.question_type !== 'slider') { %>
+  <div class="card" style="margin-top:16px;">
+    <div class="support-cardhead"><h2>Answer options</h2></div>
+
+    <% const activeOpts = question.options.filter(o => o.is_active); %>
+    <% if (!activeOpts.length) { %>
+      <div class="empty-state">No active options — clients can't answer this question.</div>
+    <% } %>
+
+    <% question.options.forEach(o => { %>
+      <div style="padding:10px 0; border-bottom:1px solid #f3f4f6; <%= o.is_active ? '' : 'opacity:.6;' %>">
+        <form method="POST" action="/support/options/<%= o.id %>" class="support-row" style="align-items:flex-end;">
+          <div class="emoji-field">
+            <input type="text" id="emoji-<%= o.id %>" name="emoji" value="<%= o.emoji || '' %>" maxlength="8" placeholder="—" />
+            <button type="button" class="emoji-trigger" data-emoji-target="emoji-<%= o.id %>" title="Pick an emoji">😊</button>
+          </div>
+          <input type="text" name="option_text" value="<%= o.option_text %>" required style="flex:1; min-width:200px;" />
+          <button class="btn btn-secondary btn-sm" type="submit">Save</button>
+        </form>
+        <div class="support-row" style="margin-top:6px;">
+          <span class="support-note">Chosen <%= o.use_count %> time<%= o.use_count === 1 ? '' : 's' %></span>
+          <% if (o.is_active) { %>
+            <form method="POST" action="/support/options/<%= o.id %>/active">
+              <input type="hidden" name="active" value="false" />
+              <button class="btn btn-secondary btn-sm" type="submit">Retire</button>
+            </form>
+          <% } else { %>
+            <form method="POST" action="/support/options/<%= o.id %>/active">
+              <input type="hidden" name="active" value="true" />
+              <button class="btn btn-secondary btn-sm" type="submit">Restore</button>
+            </form>
+          <% } %>
+          <% if (!o.use_count) { %>
+            <form method="POST" action="/support/options/<%= o.id %>/delete"
+                  onsubmit="return confirm('Delete this option permanently?');">
+              <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+            </form>
+          <% } %>
+        </div>
+      </div>
+    <% }) %>
+
+    <form method="POST" action="/support/questions/<%= question.id %>/options" class="support-row" style="margin-top:14px; align-items:flex-end;">
+      <div class="emoji-field">
+        <input type="text" id="emoji-new" name="emoji" maxlength="8" placeholder="—" />
+        <button type="button" class="emoji-trigger" data-emoji-target="emoji-new" title="Pick an emoji">😊</button>
+      </div>
+      <input type="text" name="option_text" placeholder="New option, e.g. Calm" required style="flex:1; min-width:200px;" />
+      <button class="btn btn-primary btn-sm" type="submit">Add option</button>
+    </form>
+
+    <p class="support-note" style="margin-top:12px;">
+      Options that have never been chosen can be deleted outright. Anything with history is retired instead,
+      so past check-ins still read correctly.
+    </p>
+  </div>
+<% } %>
+
+<div class="card" style="margin-top:16px;">
+  <div class="support-cardhead"><h2><%= question.is_active ? 'Retire' : 'Restore' %></h2></div>
+  <% if (question.is_active) { %>
+    <p class="support-note">Clients stop seeing this question from their next check-in. Its <%= question.answer_count %> existing answers are kept and stay visible in client mood history.</p>
+    <form method="POST" action="/support/questions/<%= question.id %>/active"
+          onsubmit="return confirm('Retire this question?');">
+      <input type="hidden" name="active" value="false" />
+      <input type="hidden" name="redirect" value="/support/questions/<%= question.id %>" />
+      <button class="btn btn-danger" type="submit">Retire question</button>
+    </form>
+  <% } else { %>
+    <p class="support-note">Puts this question back into the daily check-in.</p>
+    <form method="POST" action="/support/questions/<%= question.id %>/active">
+      <input type="hidden" name="active" value="true" />
+      <input type="hidden" name="redirect" value="/support/questions/<%= question.id %>" />
+      <button class="btn btn-secondary" type="submit">Restore question</button>
+    </form>
+  <% } %>
+</div>
