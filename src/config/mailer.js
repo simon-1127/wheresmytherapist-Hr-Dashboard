@@ -69,6 +69,20 @@ function verifyMailer() {
     console.warn('[mailer] SMTP_HOST is not set — all outbound email will be logged, not sent.');
     return;
   }
+
+  // Resend rejects with a "testing emails only" 550 when the sending
+  // domain isn't verified *for the API key in use* — which looks identical
+  // whether the domain is unverified, the MAIL_FROM value is malformed, or
+  // the key belongs to a different Resend team. Logging the parsed address
+  // at boot separates the first two from the third.
+  const from = process.env.MAIL_FROM || '';
+  const match = from.match(/<([^>]+)>/) || (from.includes('@') ? [null, from.trim()] : null);
+  const address = match ? match[1].trim() : null;
+  if (!address || !address.includes('@')) {
+    console.error(`[mailer] MAIL_FROM does not contain a usable address: ${JSON.stringify(from)}`);
+  } else {
+    console.log(`[mailer] sending as ${address} (domain: ${address.split('@')[1]})`);
+  }
   transporter
     .verify()
     .then(() => console.log(`[mailer] SMTP ready (${process.env.SMTP_HOST}:${port})`))

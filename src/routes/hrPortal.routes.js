@@ -11,6 +11,62 @@ const router = express.Router();
 // org-related from the request itself.
 router.use(requireHrContact);
 
+/**
+ * Generates a Supabase magic link and emails it. The link lands the
+ * employee in the CONSUMER app (EMPLOYEE_REDIRECT_URL), not this portal,
+ * and creates the auth.users row (and public.users, via the trigger) if
+ * the person doesn't have an account yet.
+ *
+ * Returns {ok} rather than throwing: an undelivered invite must not lose
+ * the organization_employees row, and HR needs to be told which addresses
+ * failed rather than shown a blanket success.
+ */
+async function sendEmployeeInvite(email) {
+  try {
+    const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email,
+      options: { redirectTo: process.env.EMPLOYEE_REDIRECT_URL },
+    });
+    if (linkErr || !linkData) {
+      console.error('[hr-portal] magic link generation failed for', email, linkErr);
+      return { ok: false, reason: 'link' };
+    }
+
+    // Mirror the auth user into public.users ourselves rather than trusting
+    // handle_new_auth_user's trigger to have fired.
+    //
+    // Everything downstream keys off this row: client_profiles.user_id has
+    // an FK to it, so without it the employee signs in fine, reaches "Tell
+    // us about yourself", and the profile insert dies with a 23503 they
+    // can't do anything about. This is idempotent — ignoreDuplicates leaves
+    // an existing row (and its role) untouched, so it is safe whether or
+    // not the trigger also ran.
+    if (linkData.user && linkData.user.id) {
+      const { error: mirrorErr } = await supabase
+        .from('users')
+        .upsert(
+          { id: linkData.user.id, email, role: 'client' },
+          { onConflict: 'id', ignoreDuplicates: true },
+        );
+      if (mirrorErr) {
+        console.error('[hr-portal] could not mirror public.users row for', email, mirrorErr.message);
+        return { ok: false, reason: 'user_row' };
+      }
+    }
+    const result = await sendMail({
+      to: email,
+      subject: "You're invited to Where's My Therapist",
+      html: `<p>Your employer has set you up with access to Where's My Therapist.</p>
+        <p><a href="${linkData.properties.action_link}">Click here to get started</a></p>`,
+    });
+    return result.ok ? { ok: true } : { ok: false, reason: 'mail' };
+  } catch (err) {
+    console.error('[hr-portal] invite failed for', email, err);
+    return { ok: false, reason: 'error' };
+  }
+}
+
 router.get('/', async (req, res) => {
   const orgId = req.session.hrContact.orgId;
 
@@ -67,39 +123,66 @@ router.post('/employees', async (req, res) => {
     .filter(Boolean);
 
   let added = 0;
+  const notEmailed = [];
+  const notAdded = [];
+
   for (const email of list) {
     const { error } = await supabase.from('organization_employees').insert({
       org_id: orgId,
       email,
       added_by_hr_contact_id: req.session.hrContact.id,
     });
-    if (!error) {
-      added += 1;
-
-      // Kick off a Supabase magic link — this creates the auth.users (and,
-      // via the existing trigger, public.users) row if it doesn't exist yet,
-      // and lands the employee in the CONSUMER app, not this dashboard.
-      try {
-        const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-          type: 'magiclink',
-          email,
-          options: { redirectTo: process.env.EMPLOYEE_REDIRECT_URL },
-        });
-        if (!linkErr && linkData) {
-          await sendMail({
-            to: email,
-            subject: "You're invited to Where's My Therapist",
-            html: `<p>Your employer has set you up with access to Where's My Therapist.</p>
-              <p><a href="${linkData.properties.action_link}">Click here to get started</a></p>`,
-          });
-        }
-      } catch (err) {
-        console.error('[hr-portal] magic link generation failed for', email, err);
-      }
+    if (error) {
+      // Almost always a duplicate. Previously these vanished into the
+      // "3 of 5 added" count with no indication of which two.
+      notAdded.push(email);
+      continue;
     }
+    added += 1;
+
+    const invite = await sendEmployeeInvite(email);
+    if (!invite.ok) notEmailed.push(email);
   }
 
-  req.setFlash({ type: 'success', message: `${added} of ${list.length} employee(s) added.` });
+  // A row without a delivered invite is a person who will never hear about
+  // this, so it must not be reported as a plain success.
+  const parts = [`${added} of ${list.length} employee(s) added.`];
+  if (notAdded.length) parts.push(`Already on the list (skipped): ${notAdded.join(', ')}.`);
+  if (notEmailed.length) {
+    parts.push(`Invite email could NOT be sent to: ${notEmailed.join(', ')} — use "Resend invite" once email is working.`);
+  }
+
+  req.setFlash({
+    type: notEmailed.length || notAdded.length ? 'error' : 'success',
+    message: parts.join(' '),
+  });
+  res.redirect('/hr/employees');
+});
+
+// Invites that failed to send — or expired, since Supabase magic links are
+// short-lived — had no recovery path short of removing and re-adding the
+// employee. This reissues a fresh link against the existing row.
+router.post('/employees/:employeeId/resend-invite', async (req, res) => {
+  const orgId = req.session.hrContact.orgId;
+
+  const { data: employee } = await supabase
+    .from('organization_employees')
+    .select('id, email, status')
+    .eq('id', req.params.employeeId)
+    .eq('org_id', orgId)
+    .maybeSingle();
+
+  if (!employee) {
+    req.setFlash({ type: 'error', message: 'No such employee.' });
+    return res.redirect('/hr/employees');
+  }
+
+  const invite = await sendEmployeeInvite(employee.email);
+  req.setFlash(
+    invite.ok
+      ? { type: 'success', message: `Invite re-sent to ${employee.email}.` }
+      : { type: 'error', message: `Could not send to ${employee.email} — check the mailer logs.` },
+  );
   res.redirect('/hr/employees');
 });
 
