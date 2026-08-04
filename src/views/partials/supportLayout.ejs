@@ -5,12 +5,27 @@
 </head>
 <body>
   <div class="app-shell">
-    <main class="main" style="margin: 0 auto; max-width: 800px; float: none;">
+    <main class="main" style="margin: 0 auto; max-width: 1080px; float: none;">
       <div class="topbar">
-        <div><span class="tag">Support</span></div>
-        <form method="POST" action="/support/logout">
-          <button class="btn btn-secondary btn-sm" type="submit">Log out</button>
-        </form>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span class="tag">Support</span>
+          <div class="pill-nav">
+            <a class="btn <%= path.startsWith('/support/alerts') || path === '/support' ? 'btn-primary' : 'btn-secondary' %> btn-sm" href="/support/alerts">
+              Crisis alerts<% if (typeof navCounts !== 'undefined' && navCounts.new) { %> <span class="badge badge-danger"><%= navCounts.new %></span><% } %>
+            </a>
+            <a class="btn <%= path.startsWith('/support/clients') ? 'btn-primary' : 'btn-secondary' %> btn-sm" href="/support/clients">Clients</a>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="small muted"><%= typeof agent !== 'undefined' && agent ? agent.email : '' %></span>
+          <% if (typeof viewerIsSuperAdmin !== 'undefined' && viewerIsSuperAdmin) { %>
+            <a class="btn btn-secondary btn-sm" href="/">Back to admin</a>
+          <% } else { %>
+            <form method="POST" action="/support/logout">
+              <button class="btn btn-secondary btn-sm" type="submit">Log out</button>
+            </form>
+          <% } %>
+        </div>
       </div>
       <% if (flash) { %>
         <div class="flash flash-<%= flash.type %>"><%= flash.message %></div>

@@ -1,0 +1,92 @@
+<div class="topbar">
+  <div>
+    <h1>Crisis alerts</h1>
+    <div class="subtitle">
+      <% if (counts.urgent) { %>
+        <span class="badge badge-danger"><%= counts.urgent %> urgent</span>
+      <% } %>
+      <span class="badge badge-warn"><%= counts.new %> new</span>
+      <span class="badge badge-neutral"><%= counts.acknowledged %> in progress</span>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <div class="pill-nav">
+      <% const tabs = [
+           ['open', 'Open queue'],
+           ['new', 'New'],
+           ['acknowledged', 'In progress'],
+           ['resolved', 'Resolved'],
+           ['false_positive', 'False positive'],
+           ['all', 'All'],
+         ]; %>
+      <% tabs.forEach(([key, label]) => { %>
+        <a class="btn <%= status === key ? 'btn-primary' : 'btn-secondary' %> btn-sm"
+           href="/support/alerts?status=<%= key %><%= severity ? '&severity=' + severity : '' %>"><%= label %></a>
+      <% }) %>
+    </div>
+    <form method="GET" action="/support/alerts" style="display:flex; gap:8px; align-items:center;">
+      <input type="hidden" name="status" value="<%= status %>" />
+      <select name="severity" onchange="this.form.submit()">
+        <option value="">All severities</option>
+        <% [5, 4, 3, 2].forEach(s => { %>
+          <option value="<%= s %>" <%= String(severity) === String(s) ? 'selected' : '' %>>Level <%= s %>+</option>
+        <% }) %>
+      </select>
+      <noscript><button class="btn btn-secondary btn-sm" type="submit">Filter</button></noscript>
+    </form>
+  </div>
+
+  <% if (!alerts.length) { %>
+    <div class="empty-state">Nothing in this queue.</div>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Severity</th>
+          <th>Client</th>
+          <th>Trigger</th>
+          <th>Raised</th>
+          <th>Status</th>
+          <th>Assigned</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% alerts.forEach(a => { %>
+          <tr>
+            <td>
+              <span class="badge <%= a.severity >= 4 ? 'badge-danger' : a.severity >= 3 ? 'badge-warn' : 'badge-neutral' %>">Level <%= a.severity %></span>
+              <% if (a.is_minor) { %><span class="badge badge-danger">Minor</span><% } %>
+            </td>
+            <td>
+              <a href="/support/user/<%= a.user_id %>?alert=<%= a.id %>"><%= a.full_name || a.email || 'Client' %></a>
+              <div class="small muted"><%= a.email || a.phone || '—' %></div>
+            </td>
+            <td class="small muted">
+              <%= a.trigger_type %><% if (a.matched_phrase) { %> · “<%= a.matched_phrase %>”<% } %>
+              <% if (a.similarity_score) { %> · <%= a.similarity_score %><% } %>
+            </td>
+            <td class="small muted"><%= new Date(a.created_at).toLocaleString() %></td>
+            <td>
+              <span class="badge <%= a.status === 'new' ? 'badge-danger' : a.status === 'acknowledged' ? 'badge-warn' : a.status === 'resolved' ? 'badge-success' : 'badge-neutral' %>"><%= a.status.replace('_', ' ') %></span>
+            </td>
+            <td class="small muted"><%= a.assigned_email || '—' %></td>
+            <td style="white-space:nowrap;">
+              <% if (a.status === 'new') { %>
+                <form method="POST" action="/support/alerts/<%= a.id %>/status" style="display:inline;">
+                  <input type="hidden" name="status" value="acknowledged" />
+                  <input type="hidden" name="redirect" value="/support/alerts?status=<%= status %>" />
+                  <button class="btn btn-secondary btn-sm" type="submit">Take</button>
+                </form>
+              <% } %>
+              <a class="btn btn-primary btn-sm" href="/support/user/<%= a.user_id %>?alert=<%= a.id %>">Open case</a>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>

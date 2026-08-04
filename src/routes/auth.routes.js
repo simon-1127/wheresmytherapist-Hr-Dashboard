@@ -157,7 +157,7 @@ router.get('/support/login', (req, res) => {
 });
 
 router.post('/support/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, rememberMe } = req.body;
   try {
     const authClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -183,6 +183,11 @@ router.post('/support/login', async (req, res) => {
     }
 
     req.session.supportAgent = { id: data.user.id, email: data.user.email };
+    // Support agents live in this dashboard for a whole shift — same 30-day
+    // opt-in as the super admin login, for the same reason.
+    if (rememberMe === 'on') {
+      req.sessionOptions.maxAge = REMEMBER_ME_MAX_AGE;
+    }
     res.redirect('/support');
   } catch (err) {
     console.error('[auth] support agent login failed:', err);
