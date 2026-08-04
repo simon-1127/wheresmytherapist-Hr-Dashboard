@@ -1,4 +1,4 @@
-const { pool } = require('../config/db');
+const { query } = require('../config/db');
 
 // Every query in this file goes through the raw pg pool, never the Supabase
 // client — the support/crisis feature is deliberately kept off Supabase.
@@ -9,7 +9,7 @@ const { pool } = require('../config/db');
 
 async function logSupportAction({ adminId, action, targetTable, targetId, details }) {
   try {
-    await pool.query(
+    await query(
       `INSERT INTO admin_audit_log (admin_id, action, target_table, target_id, details)
        VALUES ($1, $2, $3, $4, $5::jsonb)`,
       [adminId, action, targetTable, targetId, JSON.stringify(details || {})],
@@ -28,7 +28,7 @@ async function logSupportAction({ adminId, action, targetTable, targetId, detail
  * ages out at the bottom of the list.
  */
 async function listAlerts({ status, severity, limit = 200 }) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT a.id, a.user_id, a.severity, a.status, a.trigger_type, a.is_minor,
             a.similarity_score, a.created_at, a.acknowledged_at, a.resolved_at,
             a.assigned_to, a.source_table, a.source_message_id,
@@ -53,7 +53,7 @@ async function listAlerts({ status, severity, limit = 200 }) {
 }
 
 async function alertCounts() {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT status::text AS status, COUNT(*)::int AS n
        FROM crisis_alerts GROUP BY status`,
   );
@@ -64,7 +64,7 @@ async function alertCounts() {
   });
   // Unresolved + high severity is the number that actually matters on a
   // support shift, so it gets computed separately rather than derived.
-  const { rows: urgent } = await pool.query(
+  const { rows: urgent } = await query(
     `SELECT COUNT(*)::int AS n FROM crisis_alerts
       WHERE status IN ('new','acknowledged') AND (severity >= 4 OR is_minor)`,
   );
@@ -73,7 +73,7 @@ async function alertCounts() {
 }
 
 async function getAlert(alertId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT a.*, cp.full_name, k.phrase AS matched_phrase,
             assignee.email AS assigned_email
        FROM crisis_alerts a
@@ -87,7 +87,7 @@ async function getAlert(alertId) {
 }
 
 async function listAlertsForUser(userId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT a.id, a.severity, a.status, a.trigger_type, a.is_minor, a.created_at,
             a.acknowledged_at, a.resolved_at, a.resolution_notes,
             a.source_table, a.source_message_id,
@@ -107,7 +107,7 @@ async function listAlertsForUser(userId) {
  * never drift out of sync with the status enum.
  */
 async function updateAlertStatus({ alertId, status, agentId, notes }) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `UPDATE crisis_alerts
         SET status = $2::crisis_alert_status,
             assigned_to = COALESCE(assigned_to, $3::uuid),
@@ -128,7 +128,7 @@ async function updateAlertStatus({ alertId, status, agentId, notes }) {
 }
 
 async function claimAlert({ alertId, agentId }) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `UPDATE crisis_alerts SET assigned_to = $2::uuid WHERE id = $1
       RETURNING id, user_id`,
     [alertId, agentId],
@@ -151,7 +151,7 @@ async function getFlaggedContent({ userId, sourceTable, sourceMessageId }) {
   if (!sourceMessageId) return { kind: null, messages: [], entry: null };
 
   if (sourceTable === 'ai_messages') {
-    const { rows: owned } = await pool.query(
+    const { rows: owned } = await query(
       `SELECT m.conversation_id
          FROM ai_messages m
          JOIN ai_conversations c ON c.id = m.conversation_id
@@ -159,7 +159,7 @@ async function getFlaggedContent({ userId, sourceTable, sourceMessageId }) {
       [sourceMessageId, userId],
     );
     if (!owned[0]) return { kind: 'ai_messages', messages: [], entry: null };
-    const { rows } = await pool.query(
+    const { rows } = await query(
       `SELECT id, sender::text AS sender, content, created_at
          FROM ai_messages WHERE conversation_id = $1 ORDER BY created_at ASC`,
       [owned[0].conversation_id],
@@ -168,7 +168,7 @@ async function getFlaggedContent({ userId, sourceTable, sourceMessageId }) {
   }
 
   if (sourceTable === 'journal_entries') {
-    const { rows } = await pool.query(
+    const { rows } = await query(
       `SELECT id, title, content, mood_tag, created_at
          FROM journal_entries
         WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
@@ -183,7 +183,7 @@ async function getFlaggedContent({ userId, sourceTable, sourceMessageId }) {
 // --------------------------------------------------------------- client ---
 
 async function getClient(userId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT u.id, u.email, u.phone, u.status::text AS status, u.created_at,
             cp.full_name, cp.date_of_birth, cp.preferred_language, cp.timezone,
             cp.subscription_tier, cp.guardian_consent_completed_at,
@@ -207,7 +207,7 @@ async function getClient(userId) {
  */
 async function searchClients({ search, limit = 50 }) {
   const term = search ? `%${search}%` : null;
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT u.id, u.email, u.phone, cp.full_name, cp.subscription_tier,
             (SELECT MAX(r.response_date) FROM survey_responses r WHERE r.user_id = u.id)
               AS last_checkin,
@@ -238,7 +238,7 @@ async function searchClients({ search, limit = 50 }) {
  * reach the chart.
  */
 async function getMoodHistory({ userId, days = 60 }) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT r.id AS response_id, to_char(r.response_date, 'YYYY-MM-DD') AS response_date,
             r.completed_at,
             q.id AS question_id, q.question_text, q.question_type::text AS question_type,
@@ -259,7 +259,7 @@ async function getMoodHistory({ userId, days = 60 }) {
   rows.forEach((r) => (r.selected_option_ids || []).forEach((id) => optionIds.push(id)));
   let optionsById = {};
   if (optionIds.length) {
-    const { rows: opts } = await pool.query(
+    const { rows: opts } = await query(
       `SELECT id, option_text, emoji FROM survey_question_options WHERE id = ANY($1::uuid[])`,
       [[...new Set(optionIds)]],
     );
@@ -345,7 +345,7 @@ async function getJournalMoodTags({ userId, days = 60 }) {
   // Tags only — never entry content. Journal text is private to the client
   // and their provider; the only exception is a single entry that itself
   // triggered a crisis alert, handled in getFlaggedContent above.
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT mood_tag, COUNT(*)::int AS n, MAX(created_at) AS last_at
        FROM journal_entries
       WHERE user_id = $1 AND deleted_at IS NULL AND mood_tag IS NOT NULL
@@ -358,7 +358,7 @@ async function getJournalMoodTags({ userId, days = 60 }) {
 }
 
 async function getCheckinStreak(userId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT COUNT(*)::int AS last_30,
             MAX(response_date) AS last_date
        FROM survey_responses
@@ -371,7 +371,7 @@ async function getCheckinStreak(userId) {
 // ------------------------------------------------------------- wellness ---
 
 async function listWellnessReports(userId) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `SELECT w.id, w.title, w.summary, w.report_period_start, w.report_period_end,
             w.metrics, w.file_url, w.is_visible_to_client, w.created_at,
             author.email AS created_by_email
@@ -387,7 +387,7 @@ async function listWellnessReports(userId) {
 async function createWellnessReport({
   clientId, title, summary, periodStart, periodEnd, metrics, fileUrl, createdBy, visible,
 }) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `INSERT INTO wellness_reports
        (client_id, title, summary, report_period_start, report_period_end,
         metrics, file_url, created_by, is_visible_to_client)
@@ -402,7 +402,7 @@ async function createWellnessReport({
 }
 
 async function setReportVisibility({ reportId, visible }) {
-  const { rows } = await pool.query(
+  const { rows } = await query(
     `UPDATE wellness_reports SET is_visible_to_client = $2 WHERE id = $1
       RETURNING id, client_id`,
     [reportId, visible],
