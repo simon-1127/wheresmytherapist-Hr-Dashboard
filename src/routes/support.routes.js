@@ -153,8 +153,11 @@ router.get(
     const tab = req.query.tab || 'alerts';
     const days = Math.min(parseInt(req.query.days, 10) || 60, 365);
 
-    const client = await q.getClient(userId);
-    if (!client) return res.status(404).render('errors/404', { layout: false, backHref: '/support/alerts', backLabel: 'Back to alerts' });
+    // Named clientProfile, never `client`: EJS 3 lifts a render local called
+    // `client` into its compiler options, silently compiling the template in
+    // client mode where `include` is not supplied. See the guard in server.js.
+    const clientProfile = await q.getClient(userId);
+    if (!clientProfile) return res.status(404).render('errors/404', { layout: false, backHref: '/support/alerts', backLabel: 'Back to alerts' });
 
     const alerts = await q.listAlertsForUser(userId);
 
@@ -199,8 +202,8 @@ router.get(
     const series = q.buildMoodSeries(history).map((s) => ({ ...s, svg: sparklineSvg(s) }));
 
     res.render('support/user', {
-      title: client.full_name || 'Client',
-      client,
+      title: clientProfile.full_name || 'Client',
+      clientProfile,
       tab,
       days,
       alerts,

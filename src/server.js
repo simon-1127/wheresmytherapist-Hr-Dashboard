@@ -65,6 +65,40 @@ app.use((req, res, next) => {
   next();
 });
 
+// EJS reinterprets a fixed set of render locals as *compiler options* rather
+// than template data (see _OPTS_PASSABLE_WITH_DATA in ejs/lib/ejs.js). The
+// dangerous one is `client`: a local by that name compiles the template in
+// client mode, where EJS does not supply the `include` function — which
+// surfaces as a baffling "include is not a function" in a different file,
+// and, because `view cache` is on in production, sticks in the compiled
+// template cache until the process restarts.
+//
+// This wrapper runs before express-ejs-layouts' own render override, so the
+// collision is reported at the offending route instead of days later.
+const EJS_RESERVED_LOCALS = [
+  'client', 'cache', 'context', 'scope', 'debug', 'compileDebug',
+  'delimiter', 'filename', 'async', 'strict', 'rmWhitespace', '_with',
+];
+
+app.use((req, res, next) => {
+  const render = res.render.bind(res);
+  res.render = function (view, options, cb) {
+    if (options && typeof options === 'object') {
+      const clashes = EJS_RESERVED_LOCALS.filter((k) => options[k] !== undefined);
+      if (clashes.length) {
+        return next(
+          new Error(
+            `Render local(s) [${clashes.join(', ')}] collide with EJS compiler options ` +
+              `while rendering "${view}" — rename them (e.g. client -> clientProfile).`,
+          ),
+        );
+      }
+    }
+    return render(view, options, cb);
+  };
+  next();
+});
+
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.use('/', authRoutes);

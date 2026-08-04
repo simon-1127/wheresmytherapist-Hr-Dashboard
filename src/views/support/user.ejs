@@ -1,28 +1,28 @@
 <div class="support-head">
   <div>
-    <h1><%= client.full_name || client.email || 'Client' %></h1>
+    <h1><%= clientProfile.full_name || clientProfile.email || 'Client' %></h1>
     <div class="meta">
-      <span class="badge badge-info"><%= client.subscription_tier %></span>
-      <span class="badge <%= client.status === 'active' ? 'badge-success' : 'badge-warn' %>"><%= client.status %></span>
-      <% if (client.age !== null && client.age < 18) { %><span class="badge badge-danger">Minor · <%= client.age %></span><% } %>
-      <% if (client.org_name) { %><span class="badge badge-neutral"><%= client.org_name %> employee</span><% } %>
+      <span class="badge badge-info"><%= clientProfile.subscription_tier %></span>
+      <span class="badge <%= clientProfile.status === 'active' ? 'badge-success' : 'badge-warn' %>"><%= clientProfile.status %></span>
+      <% if (clientProfile.age !== null && clientProfile.age < 18) { %><span class="badge badge-danger">Minor · <%= clientProfile.age %></span><% } %>
+      <% if (clientProfile.org_name) { %><span class="badge badge-neutral"><%= clientProfile.org_name %> employee</span><% } %>
     </div>
   </div>
   <div class="support-tabs">
-    <a class="<%= tab === 'alerts' ? 'is-active' : '' %>" href="/support/user/<%= client.id %>?tab=alerts">Alerts</a>
-    <a class="<%= tab === 'mood' ? 'is-active' : '' %>" href="/support/user/<%= client.id %>?tab=mood&days=<%= days %>">Mood tracking</a>
-    <a class="<%= tab === 'wellness' ? 'is-active' : '' %>" href="/support/user/<%= client.id %>?tab=wellness">Wellness</a>
+    <a class="<%= tab === 'alerts' ? 'is-active' : '' %>" href="/support/user/<%= clientProfile.id %>?tab=alerts">Alerts</a>
+    <a class="<%= tab === 'mood' ? 'is-active' : '' %>" href="/support/user/<%= clientProfile.id %>?tab=mood&days=<%= days %>">Mood tracking</a>
+    <a class="<%= tab === 'wellness' ? 'is-active' : '' %>" href="/support/user/<%= clientProfile.id %>?tab=wellness">Wellness</a>
   </div>
 </div>
 
 <div class="card">
   <div class="card-header"><h2>Client</h2></div>
   <table>
-    <tr><td class="muted">Email</td><td><%= client.email || '—' %></td></tr>
-    <tr><td class="muted">Phone</td><td><%= client.phone || '—' %></td></tr>
-    <tr><td class="muted">Age</td><td><%= client.age !== null ? client.age : '—' %><% if (client.age !== null && client.age < 18) { %> · guardian consent <%= client.guardian_consent_completed_at ? 'on file' : 'MISSING' %><% } %></td></tr>
-    <tr><td class="muted">Language</td><td><%= client.preferred_language || '—' %></td></tr>
-    <tr><td class="muted">Timezone</td><td><%= client.timezone || '—' %></td></tr>
+    <tr><td class="muted">Email</td><td><%= clientProfile.email || '—' %></td></tr>
+    <tr><td class="muted">Phone</td><td><%= clientProfile.phone || '—' %></td></tr>
+    <tr><td class="muted">Age</td><td><%= clientProfile.age !== null ? clientProfile.age : '—' %><% if (clientProfile.age !== null && clientProfile.age < 18) { %> · guardian consent <%= clientProfile.guardian_consent_completed_at ? 'on file' : 'MISSING' %><% } %></td></tr>
+    <tr><td class="muted">Language</td><td><%= clientProfile.preferred_language || '—' %></td></tr>
+    <tr><td class="muted">Timezone</td><td><%= clientProfile.timezone || '—' %></td></tr>
     <tr><td class="muted">Check-ins (30d)</td><td><%= streak.last_30 %><% if (streak.last_date) { %> · last <%= new Date(streak.last_date).toLocaleDateString() %><% } %></td></tr>
   </table>
   <p class="support-note" style="margin-top:10px;">Support access is limited to this client's crisis alerts, daily check-ins, and wellness reports. Full chat history, journal contents, and session notes are not shown here.</p>
@@ -33,7 +33,7 @@
     <div class="card">
       <div class="card-header"><h2>Alert history</h2></div>
       <% if (!alerts.length) { %>
-        <div class="empty-state small">No crisis alerts on record for this client.</div>
+        <div class="empty-state small">No crisis alerts on record for this clientProfile.</div>
       <% } else { %>
         <table>
           <thead><tr><th>Severity</th><th>Status</th><th>Raised</th><th></th></tr></thead>
@@ -46,7 +46,7 @@
                 </td>
                 <td><span class="badge <%= a.status === 'new' ? 'badge-danger' : a.status === 'acknowledged' ? 'badge-warn' : a.status === 'resolved' ? 'badge-success' : 'badge-neutral' %>"><%= a.status.replace('_', ' ') %></span></td>
                 <td class="small muted"><%= new Date(a.created_at).toLocaleString() %></td>
-                <td><a class="btn btn-secondary btn-sm" href="/support/user/<%= client.id %>?alert=<%= a.id %>">View</a></td>
+                <td><a class="btn btn-secondary btn-sm" href="/support/user/<%= clientProfile.id %>?alert=<%= a.id %>">View</a></td>
               </tr>
             <% }) %>
           </tbody>
@@ -71,7 +71,7 @@
 
         <% if (selectedAlert.status !== 'resolved' && selectedAlert.status !== 'false_positive') { %>
           <form method="POST" action="/support/alerts/<%= selectedAlert.id %>/status" style="margin-top:12px;">
-            <input type="hidden" name="redirect" value="/support/user/<%= client.id %>?alert=<%= selectedAlert.id %>" />
+            <input type="hidden" name="redirect" value="/support/user/<%= clientProfile.id %>?alert=<%= selectedAlert.id %>" />
             <label class="small muted" for="resolution_notes">Resolution note</label>
             <textarea id="resolution_notes" name="resolution_notes" rows="3" style="width:100%;"
                       placeholder="What was done — outreach attempted, contacted, escalated to provider, etc."></textarea>
@@ -86,7 +86,7 @@
           </form>
         <% } else { %>
           <form method="POST" action="/support/alerts/<%= selectedAlert.id %>/status" style="margin-top:12px;">
-            <input type="hidden" name="redirect" value="/support/user/<%= client.id %>?alert=<%= selectedAlert.id %>" />
+            <input type="hidden" name="redirect" value="/support/user/<%= clientProfile.id %>?alert=<%= selectedAlert.id %>" />
             <input type="hidden" name="status" value="acknowledged" />
             <button class="btn btn-secondary btn-sm" type="submit">Reopen</button>
           </form>
@@ -124,7 +124,7 @@
       <h2>Check-in trends</h2>
       <div class="support-tabs">
         <% [30, 60, 180].forEach(d => { %>
-          <a class="<%= days === d ? 'is-active' : '' %>" href="/support/user/<%= client.id %>?tab=mood&days=<%= d %>"><%= d %>d</a>
+          <a class="<%= days === d ? 'is-active' : '' %>" href="/support/user/<%= clientProfile.id %>?tab=mood&days=<%= d %>"><%= d %>d</a>
         <% }) %>
       </div>
     </div>
@@ -256,7 +256,7 @@
 
   <div class="card" style="margin-top:16px;">
     <div class="card-header"><h2>New wellness report</h2></div>
-    <form method="POST" action="/support/user/<%= client.id %>/wellness">
+    <form method="POST" action="/support/user/<%= clientProfile.id %>/wellness">
       <div class="support-cols">
         <div>
           <label class="small muted" for="w-title">Title</label>
