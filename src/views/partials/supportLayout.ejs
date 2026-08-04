@@ -89,8 +89,16 @@
 
 
     /* Emoji picker */
-    .emoji-field { display: flex; align-items: center; gap: 6px; }
-    .emoji-field input[type="text"] { width: 64px; text-align: center; font-size: 18px; }
+    .emoji-field { display: flex; align-items: flex-start; gap: 6px; }
+    .emoji-slot { display: flex; flex-direction: column; align-items: center; }
+    .emoji-field input[type="text"] { width: 64px; text-align: center; font-size: 18px; cursor: pointer; }
+    /* The glyph is unreadable without an emoji font, so the name sits under
+       the field. It is the only way to tell two stored options apart on a
+       machine that renders both as the same empty box. */
+    .emoji-name {
+      font-size: 9px; color: #6b7280; margin-top: 2px; max-width: 68px;
+      text-align: center; line-height: 1.15; word-break: break-word;
+    }
     .emoji-trigger {
       border: 1px solid #e5e7eb; background: #fff; border-radius: 8px;
       padding: 6px 9px; font-size: 15px; cursor: pointer; line-height: 1;
@@ -241,7 +249,11 @@
             b.innerHTML = '<span class="g"></span><span class="n"></span>';
             b.querySelector('.g').textContent = e[0];
             b.querySelector('.n').textContent = e[1];
-            b.addEventListener('click', function () { input.value = e[0]; close(); });
+            b.addEventListener('click', function () {
+              input.value = e[0];
+              refreshNames();
+              close();
+            });
             grid.appendChild(b);
           });
           body.appendChild(grid);
@@ -255,9 +267,12 @@
         }
       }
 
-      function open(trigger) {
+      // `anchor` is either the picker button (which names its target) or
+      // the emoji field itself.
+      function open(anchor) {
         close();
-        var input = document.getElementById(trigger.getAttribute('data-emoji-target'));
+        var targetId = anchor.getAttribute('data-emoji-target');
+        var input = targetId ? document.getElementById(targetId) : anchor;
         if (!input) return;
 
         pop = document.createElement('div');
@@ -279,23 +294,70 @@
         clear.type = 'button';
         clear.className = 'emoji-clear';
         clear.textContent = 'No emoji';
-        clear.addEventListener('click', function () { input.value = ''; close(); });
+        clear.addEventListener('click', function () {
+          input.value = '';
+          refreshNames();
+          close();
+        });
         pop.appendChild(clear);
 
         document.body.appendChild(pop);
         build(input, '');
 
-        var r = trigger.getBoundingClientRect();
+        var r = anchor.getBoundingClientRect();
         pop.style.top = (r.bottom + window.scrollY + 6) + 'px';
         pop.style.left = Math.max(8, Math.min(r.left + window.scrollX, window.innerWidth - 332)) + 'px';
         search.focus();
       }
 
+      // Name lookup, built from the same palette the picker uses.
+      var NAMES = {};
+      GROUPS.forEach(function (g) {
+        g[1].forEach(function (e) { NAMES[e[0].replace(/\uFE0F/g, '')] = e[1]; });
+      });
+
+      function describe(value) {
+        if (!value) return '';
+        var key = value.replace(/\uFE0F/g, '');
+        if (NAMES[key]) return NAMES[key];
+        // Not in the palette — fall back to codepoints, so an emoji added
+        // before this picker existed is still identifiable.
+        return Array.from(key)
+          .map(function (ch) { return 'U+' + ch.codePointAt(0).toString(16).toUpperCase(); })
+          .join(' ');
+      }
+
+      function refreshNames() {
+        var labels = document.querySelectorAll('[data-emoji-name-for]');
+        Array.prototype.forEach.call(labels, function (el) {
+          var input = document.getElementById(el.getAttribute('data-emoji-name-for'));
+          el.textContent = input ? describe(input.value) : '';
+        });
+      }
+
       document.addEventListener('click', function (ev) {
         var trigger = ev.target.closest('.emoji-trigger');
         if (trigger) { ev.preventDefault(); open(trigger); return; }
+
+        // Clicking the field itself opens the picker too — typing an emoji
+        // on a desktop keyboard isn't realistic, so the field is really a
+        // display of the current choice.
+        var field = ev.target.closest('[data-emoji-input]');
+        if (field) { open(field); return; }
+
         if (pop && !ev.target.closest('.emoji-pop')) close();
       });
+
+      document.addEventListener('focusin', function (ev) {
+        var field = ev.target.closest && ev.target.closest('[data-emoji-input]');
+        if (field && !pop) open(field);
+      });
+
+      document.addEventListener('input', function (ev) {
+        if (ev.target.closest && ev.target.closest('[data-emoji-input]')) refreshNames();
+      });
+
+      document.addEventListener('DOMContentLoaded', refreshNames);
       document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
 
       // Detect a missing colour emoji font by drawing one and checking

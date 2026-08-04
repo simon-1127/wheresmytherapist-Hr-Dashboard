@@ -73,8 +73,12 @@
       <div style="padding:10px 0; border-bottom:1px solid #f3f4f6; <%= o.is_active ? '' : 'opacity:.6;' %>">
         <form method="POST" action="/support/options/<%= o.id %>" class="support-row" style="align-items:flex-end;">
           <div class="emoji-field">
-            <input type="text" id="emoji-<%= o.id %>" name="emoji" value="<%= o.emoji || '' %>" maxlength="8" placeholder="—" />
-            <button type="button" class="emoji-trigger" data-emoji-target="emoji-<%= o.id %>" title="Pick an emoji">😊</button>
+            <div class="emoji-slot">
+              <input type="text" id="emoji-<%= o.id %>" name="emoji" value="<%= o.emoji || '' %>" maxlength="8"
+                     placeholder="—" data-emoji-input autocomplete="off" />
+              <span class="emoji-name" data-emoji-name-for="emoji-<%= o.id %>"></span>
+            </div>
+            <button type="button" class="emoji-trigger" data-emoji-target="emoji-<%= o.id %>" title="Pick an emoji" aria-label="Pick an emoji"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
           </div>
           <input type="text" name="option_text" value="<%= o.option_text %>" required style="flex:1; min-width:200px;" />
           <button class="btn btn-secondary btn-sm" type="submit">Save</button>
@@ -104,8 +108,12 @@
 
     <form method="POST" action="/support/questions/<%= question.id %>/options" class="support-row" style="margin-top:14px; align-items:flex-end;">
       <div class="emoji-field">
-        <input type="text" id="emoji-new" name="emoji" maxlength="8" placeholder="—" />
-        <button type="button" class="emoji-trigger" data-emoji-target="emoji-new" title="Pick an emoji">😊</button>
+        <div class="emoji-slot">
+          <input type="text" id="emoji-new" name="emoji" maxlength="8" placeholder="—"
+                 data-emoji-input autocomplete="off" />
+          <span class="emoji-name" data-emoji-name-for="emoji-new"></span>
+        </div>
+        <button type="button" class="emoji-trigger" data-emoji-target="emoji-new" title="Pick an emoji" aria-label="Pick an emoji"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
       </div>
       <input type="text" name="option_text" placeholder="New option, e.g. Calm" required style="flex:1; min-width:200px;" />
       <button class="btn btn-primary btn-sm" type="submit">Add option</button>
