@@ -1,17 +1,17 @@
-<div class="topbar">
+<div class="support-head">
   <div>
     <h1><%= client.full_name || client.email || 'Client' %></h1>
-    <div class="subtitle">
+    <div class="meta">
       <span class="badge badge-info"><%= client.subscription_tier %></span>
       <span class="badge <%= client.status === 'active' ? 'badge-success' : 'badge-warn' %>"><%= client.status %></span>
       <% if (client.age !== null && client.age < 18) { %><span class="badge badge-danger">Minor · <%= client.age %></span><% } %>
       <% if (client.org_name) { %><span class="badge badge-neutral"><%= client.org_name %> employee</span><% } %>
     </div>
   </div>
-  <div class="pill-nav">
-    <a class="btn <%= tab === 'alerts' ? 'btn-primary' : 'btn-secondary' %> btn-sm" href="/support/user/<%= client.id %>?tab=alerts">Alerts</a>
-    <a class="btn <%= tab === 'mood' ? 'btn-primary' : 'btn-secondary' %> btn-sm" href="/support/user/<%= client.id %>?tab=mood&days=<%= days %>">Mood tracking</a>
-    <a class="btn <%= tab === 'wellness' ? 'btn-primary' : 'btn-secondary' %> btn-sm" href="/support/user/<%= client.id %>?tab=wellness">Wellness</a>
+  <div class="support-tabs">
+    <a class="<%= tab === 'alerts' ? 'is-active' : '' %>" href="/support/user/<%= client.id %>?tab=alerts">Alerts</a>
+    <a class="<%= tab === 'mood' ? 'is-active' : '' %>" href="/support/user/<%= client.id %>?tab=mood&days=<%= days %>">Mood tracking</a>
+    <a class="<%= tab === 'wellness' ? 'is-active' : '' %>" href="/support/user/<%= client.id %>?tab=wellness">Wellness</a>
   </div>
 </div>
 
@@ -25,11 +25,11 @@
     <tr><td class="muted">Timezone</td><td><%= client.timezone || '—' %></td></tr>
     <tr><td class="muted">Check-ins (30d)</td><td><%= streak.last_30 %><% if (streak.last_date) { %> · last <%= new Date(streak.last_date).toLocaleDateString() %><% } %></td></tr>
   </table>
-  <p class="small muted" style="margin-top:10px;">Support access is limited to this client's crisis alerts, daily check-ins, and wellness reports. Full chat history, journal contents, and session notes are not shown here.</p>
+  <p class="support-note" style="margin-top:10px;">Support access is limited to this client's crisis alerts, daily check-ins, and wellness reports. Full chat history, journal contents, and session notes are not shown here.</p>
 </div>
 
 <% if (tab === 'alerts') { %>
-  <div class="grid grid-2col" style="margin-top:16px;">
+  <div class="support-cols" style="margin-top:16px;">
     <div class="card">
       <div class="card-header"><h2>Alert history</h2></div>
       <% if (!alerts.length) { %>
@@ -75,14 +75,14 @@
             <label class="small muted" for="resolution_notes">Resolution note</label>
             <textarea id="resolution_notes" name="resolution_notes" rows="3" style="width:100%;"
                       placeholder="What was done — outreach attempted, contacted, escalated to provider, etc."></textarea>
-            <div class="pill-nav" style="margin-top:10px;">
+            <div class="support-row" style="margin-top:10px;">
               <% if (selectedAlert.status === 'new') { %>
                 <button class="btn btn-secondary btn-sm" type="submit" name="status" value="acknowledged">Acknowledge</button>
               <% } %>
               <button class="btn btn-primary btn-sm" type="submit" name="status" value="resolved">Resolve</button>
               <button class="btn btn-secondary btn-sm" type="submit" name="status" value="false_positive">False positive</button>
             </div>
-            <p class="small muted" style="margin-top:6px;">A note is required to resolve or dismiss.</p>
+            <p class="support-note" style="margin-top:6px;">A note is required to resolve or dismiss.</p>
           </form>
         <% } else { %>
           <form method="POST" action="/support/alerts/<%= selectedAlert.id %>/status" style="margin-top:12px;">
@@ -97,7 +97,7 @@
 
   <div class="card" style="margin-top:16px;">
     <div class="card-header"><h2>Flagged content</h2></div>
-    <p class="small muted">Only the item that triggered this alert (and, for chat, the conversation it sits in) is shown — not the client's full history.</p>
+    <p class="support-note">Only the item that triggered this alert (and, for chat, the conversation it sits in) is shown — not the client's full history.</p>
 
     <% if (flagged.kind === 'journal_entries' && flagged.entry) { %>
       <div style="padding:10px 12px; border-radius:6px; background:#fee2e2; border-left:4px solid #dc2626;">
@@ -120,11 +120,11 @@
 
 <% if (tab === 'mood') { %>
   <div class="card" style="margin-top:16px;">
-    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="support-cardhead">
       <h2>Check-in trends</h2>
-      <div class="pill-nav">
+      <div class="support-tabs">
         <% [30, 60, 180].forEach(d => { %>
-          <a class="btn <%= days === d ? 'btn-primary' : 'btn-secondary' %> btn-sm" href="/support/user/<%= client.id %>?tab=mood&days=<%= d %>"><%= d %>d</a>
+          <a class="<%= days === d ? 'is-active' : '' %>" href="/support/user/<%= client.id %>?tab=mood&days=<%= d %>"><%= d %>d</a>
         <% }) %>
       </div>
     </div>
@@ -150,13 +150,13 @@
             </div>
           </div>
           <div class="small muted"><%= s.minLabel || s.min %> → <%= s.maxLabel || s.max %></div>
-          <%- include('_moodChart', { s }) %>
+          <%- s.svg %>
         </div>
       <% }) %>
     <% } %>
   </div>
 
-  <div class="grid grid-2col" style="margin-top:16px;">
+  <div class="support-cols" style="margin-top:16px;">
     <div class="card">
       <div class="card-header"><h2>Check-in log</h2></div>
       <% if (!history.length) { %>
@@ -195,7 +195,7 @@
 
     <div class="card">
       <div class="card-header"><h2>Journal mood tags</h2></div>
-      <p class="small muted">Tag counts only. Journal text is not visible to support.</p>
+      <p class="support-note">Tag counts only. Journal text is not visible to support.</p>
       <% if (!journalTags.length) { %>
         <div class="empty-state small">No tagged journal entries in this window.</div>
       <% } else { %>
@@ -222,6 +222,7 @@
     <% if (!reports.length) { %>
       <div class="empty-state small">No wellness reports filed for this client yet.</div>
     <% } else { %>
+      <div class="support-scroll">
       <table>
         <thead><tr><th>Report</th><th>Period</th><th>Filed by</th><th>Client visibility</th><th></th></tr></thead>
         <tbody>
@@ -249,13 +250,14 @@
           <% }) %>
         </tbody>
       </table>
+      </div>
     <% } %>
   </div>
 
   <div class="card" style="margin-top:16px;">
     <div class="card-header"><h2>New wellness report</h2></div>
     <form method="POST" action="/support/user/<%= client.id %>/wellness">
-      <div class="grid grid-2col">
+      <div class="support-cols">
         <div>
           <label class="small muted" for="w-title">Title</label>
           <input id="w-title" type="text" name="title" required style="width:100%;" placeholder="Monthly wellness summary" />

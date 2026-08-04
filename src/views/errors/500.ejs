@@ -8,7 +8,7 @@
     <div class="auth-card" style="text-align:center;">
       <h1>Something went wrong</h1>
       <p class="muted" style="margin: 10px 0 20px;"><%= (typeof message !== 'undefined' && message) ? message : 'An unexpected error occurred.' %></p>
-      <a class="btn btn-primary" href="/">Back to dashboard</a>
+      <a class="btn btn-primary" href="<%= typeof backHref !== 'undefined' && backHref ? backHref : '/' %>"><%= typeof backLabel !== 'undefined' && backLabel ? backLabel : 'Back to dashboard' %></a>
     </div>
   </div>
 </body>

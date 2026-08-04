@@ -77,14 +77,23 @@ app.use('/hr', hrPortalRoutes);
 app.use('/support', supportRoutes);
 app.use('/onboarding', onboardingRoutes);
 
+// Which "back" link an error page offers depends on which portal the request
+// came from — a support agent bounced to /, or an HR contact bounced to the
+// admin dashboard, just hits another login wall.
+function errorExit(req) {
+  if (req.path.startsWith('/support')) return { backHref: '/support/alerts', backLabel: 'Back to alerts' };
+  if (req.path.startsWith('/hr')) return { backHref: '/hr', backLabel: 'Back to HR portal' };
+  return { backHref: '/', backLabel: 'Back to dashboard' };
+}
+
 app.use((req, res) => {
-  res.status(404).render('errors/404', { layout: false });
+  res.status(404).render('errors/404', { layout: false, ...errorExit(req) });
 });
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).render('errors/500', { layout: false, message: err.message });
+  res.status(500).render('errors/500', { layout: false, message: err.message, ...errorExit(req) });
 });
 
 const port = process.env.PORT || 3100;

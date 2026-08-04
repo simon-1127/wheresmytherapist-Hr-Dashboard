@@ -2,31 +2,130 @@
 <html lang="en">
 <head>
   <%- include('head') %>
+  <style>
+    /* The support console has no sidebar, so it must not reuse .app-shell —
+       that shell reserves a fixed sidebar column, which squeezed every
+       support page into a ~240px strip. Everything structural here is
+       scoped under .support-shell; shared component classes (.card, .btn,
+       .badge, tables) still come from style.css. */
+    .support-shell { min-height: 100vh; }
+
+    .support-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap;
+      padding: 12px 24px;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      position: sticky; top: 0; z-index: 20;
+    }
+    .support-bar-left { display: flex; align-items: center; gap: 20px; min-width: 0; }
+    .support-bar-right { display: flex; align-items: center; gap: 12px; }
+    .support-bar-right form { margin: 0; }
+
+    .support-brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+    .support-brand img { height: 26px; width: auto; }
+    .support-brand .name { font-weight: 600; font-size: 14px; }
+    .support-brand .tag {
+      font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+      color: #6b7280;
+    }
+
+    .support-nav { display: flex; align-items: center; gap: 4px; }
+    .support-nav a {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 14px; border-radius: 8px;
+      font-size: 14px; font-weight: 500; text-decoration: none;
+      color: #4b5563; white-space: nowrap;
+    }
+    .support-nav a:hover { background: #f3f4f6; color: #111827; }
+    .support-nav a.is-active { background: #eef2ff; color: #4338ca; }
+    .support-nav .count {
+      min-width: 20px; padding: 1px 6px; border-radius: 999px;
+      background: #dc2626; color: #fff;
+      font-size: 11px; font-weight: 600; text-align: center;
+    }
+
+    .support-email { font-size: 13px; color: #6b7280; }
+
+    .support-main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+
+    /* Page heading, replacing the admin .topbar which assumes the shell. */
+    .support-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+    }
+    .support-head h1 { margin: 0 0 6px; font-size: 24px; line-height: 1.2; }
+    .support-head .meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    /* Horizontal button groups. .pill-nav in style.css stacks in this
+       context, so tabs and action rows use this instead. */
+    .support-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .support-row > form { margin: 0; }
+
+    .support-tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .support-tabs a {
+      padding: 6px 12px; border-radius: 999px;
+      border: 1px solid #e5e7eb; background: #fff;
+      font-size: 13px; font-weight: 500; color: #4b5563; text-decoration: none;
+      white-space: nowrap;
+    }
+    .support-tabs a:hover { background: #f9fafb; color: #111827; }
+    .support-tabs a.is-active { background: #4338ca; border-color: #4338ca; color: #fff; }
+
+    .support-cardhead {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .support-cardhead h2 { margin: 0; font-size: 16px; }
+
+    /* Wide tables scroll inside their card instead of bursting out of it. */
+    .support-scroll { overflow-x: auto; }
+    .support-scroll > table { width: 100%; min-width: 720px; }
+
+    .support-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    .support-stack > * + * { margin-top: 16px; }
+
+    .support-note { font-size: 12px; color: #6b7280; }
+
+    @media (max-width: 900px) {
+      .support-cols { grid-template-columns: 1fr; }
+      .support-main { padding: 16px; }
+      .support-bar { padding: 10px 16px; }
+      .support-email { display: none; }
+    }
+  </style>
 </head>
 <body>
-  <div class="app-shell">
-    <main class="main" style="margin: 0 auto; max-width: 1080px; float: none;">
-      <div class="topbar">
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <span class="tag">Support</span>
-          <div class="pill-nav">
-            <a class="btn <%= path.startsWith('/support/alerts') || path === '/support' ? 'btn-primary' : 'btn-secondary' %> btn-sm" href="/support/alerts">
-              Crisis alerts<% if (typeof navCounts !== 'undefined' && navCounts.new) { %> <span class="badge badge-danger"><%= navCounts.new %></span><% } %>
-            </a>
-            <a class="btn <%= path.startsWith('/support/clients') ? 'btn-primary' : 'btn-secondary' %> btn-sm" href="/support/clients">Clients</a>
+  <div class="support-shell">
+    <header class="support-bar">
+      <div class="support-bar-left">
+        <div class="support-brand">
+          <img src="/img/logo.png" alt="" />
+          <div>
+            <div class="name">Where's My Therapist</div>
+            <div class="tag">Support console</div>
           </div>
         </div>
-        <div style="display:flex; align-items:center; gap:10px;">
-          <span class="small muted"><%= typeof agent !== 'undefined' && agent ? agent.email : '' %></span>
-          <% if (typeof viewerIsSuperAdmin !== 'undefined' && viewerIsSuperAdmin) { %>
-            <a class="btn btn-secondary btn-sm" href="/">Back to admin</a>
-          <% } else { %>
-            <form method="POST" action="/support/logout">
-              <button class="btn btn-secondary btn-sm" type="submit">Log out</button>
-            </form>
-          <% } %>
-        </div>
+        <nav class="support-nav">
+          <a class="<%= path.startsWith('/support/alerts') || path === '/support' ? 'is-active' : '' %>" href="/support/alerts">
+            Crisis alerts<% if (typeof navCounts !== 'undefined' && navCounts.new) { %><span class="count"><%= navCounts.new %></span><% } %>
+          </a>
+          <a class="<%= path.startsWith('/support/clients') ? 'is-active' : '' %>" href="/support/clients">Clients</a>
+        </nav>
       </div>
+      <div class="support-bar-right">
+        <span class="support-email"><%= typeof agent !== 'undefined' && agent ? agent.email : '' %></span>
+        <% if (typeof viewerIsSuperAdmin !== 'undefined' && viewerIsSuperAdmin) { %>
+          <a class="btn btn-secondary btn-sm" href="/">Back to admin</a>
+        <% } else { %>
+          <form method="POST" action="/support/logout">
+            <button class="btn btn-secondary btn-sm" type="submit">Log out</button>
+          </form>
+        <% } %>
+      </div>
+    </header>
+
+    <main class="support-main">
       <% if (flash) { %>
         <div class="flash flash-<%= flash.type %>"><%= flash.message %></div>
       <% } %>

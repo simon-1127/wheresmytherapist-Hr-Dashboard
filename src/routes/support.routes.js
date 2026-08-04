@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireSupportAccess } = require('../middleware/auth');
 const q = require('../lib/supportQueries');
+const { sparklineSvg } = require('../lib/sparkline');
 
 const router = express.Router();
 router.use(requireSupportAccess);
@@ -74,7 +75,7 @@ router.get(
   '/alerts/:id',
   wrap(async (req, res) => {
     const alert = await q.getAlert(req.params.id);
-    if (!alert) return res.status(404).render('errors/404', { layout: false });
+    if (!alert) return res.status(404).render('errors/404', { layout: false, backHref: '/support/alerts', backLabel: 'Back to alerts' });
     res.redirect(`/support/user/${alert.user_id}?alert=${alert.id}`);
   }),
 );
@@ -101,7 +102,7 @@ router.post(
       agentId: agentId(req),
       notes,
     });
-    if (!updated) return res.status(404).render('errors/404', { layout: false });
+    if (!updated) return res.status(404).render('errors/404', { layout: false, backHref: '/support/alerts', backLabel: 'Back to alerts' });
 
     await q.logSupportAction({
       adminId: agentId(req),
@@ -120,7 +121,7 @@ router.post(
   '/alerts/:id/claim',
   wrap(async (req, res) => {
     const claimed = await q.claimAlert({ alertId: req.params.id, agentId: agentId(req) });
-    if (!claimed) return res.status(404).render('errors/404', { layout: false });
+    if (!claimed) return res.status(404).render('errors/404', { layout: false, backHref: '/support/alerts', backLabel: 'Back to alerts' });
     await q.logSupportAction({
       adminId: agentId(req),
       action: 'crisis_alert.claim',
@@ -153,7 +154,7 @@ router.get(
     const days = Math.min(parseInt(req.query.days, 10) || 60, 365);
 
     const client = await q.getClient(userId);
-    if (!client) return res.status(404).render('errors/404', { layout: false });
+    if (!client) return res.status(404).render('errors/404', { layout: false, backHref: '/support/alerts', backLabel: 'Back to alerts' });
 
     const alerts = await q.listAlertsForUser(userId);
 
@@ -193,7 +194,9 @@ router.get(
       q.getCheckinStreak(userId),
       q.listWellnessReports(userId),
     ]);
-    const series = q.buildMoodSeries(history);
+    // SVG is built here rather than in the template — see lib/sparkline.js
+    // for why this stopped being an EJS partial.
+    const series = q.buildMoodSeries(history).map((s) => ({ ...s, svg: sparklineSvg(s) }));
 
     res.render('support/user', {
       title: client.full_name || 'Client',
@@ -276,7 +279,7 @@ router.post(
   wrap(async (req, res) => {
     const visible = req.body.visible === 'true';
     const updated = await q.setReportVisibility({ reportId: req.params.id, visible });
-    if (!updated) return res.status(404).render('errors/404', { layout: false });
+    if (!updated) return res.status(404).render('errors/404', { layout: false, backHref: '/support/alerts', backLabel: 'Back to alerts' });
     await q.logSupportAction({
       adminId: agentId(req),
       action: 'wellness_report.visibility',

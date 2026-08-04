@@ -1,10 +1,10 @@
-<div class="topbar">
+<div class="support-head">
   <div>
     <h1>Clients</h1>
-    <div class="subtitle small muted">Search by name, email, or phone to review check-ins and file a wellness report.</div>
+    <div class="support-note">Search by name, email, or phone to review check-ins and file a wellness report.</div>
   </div>
-  <form method="GET" action="/support/clients" style="display:flex; gap:8px;">
-    <input type="text" name="search" value="<%= search %>" placeholder="Name, email, or phone" />
+  <form method="GET" action="/support/clients" class="support-row">
+    <input type="text" name="search" value="<%= search %>" placeholder="Name, email, or phone" style="width:auto; min-width:240px;" />
     <button class="btn btn-primary btn-sm" type="submit">Search</button>
   </form>
 </div>
@@ -13,23 +13,29 @@
   <% if (!clients.length) { %>
     <div class="empty-state"><%= search ? 'No clients match that search.' : 'No clients on record.' %></div>
   <% } else { %>
-    <table>
-      <thead>
-        <tr><th>Client</th><th>Contact</th><th>Tier</th><th>Last check-in</th><th>Open alerts</th><th></th></tr>
-      </thead>
-      <tbody>
-        <% clients.forEach(c => { %>
-          <tr>
-            <td><a href="/support/user/<%= c.id %>"><%= c.full_name || '—' %></a></td>
-            <td class="small muted"><%= c.email || c.phone || '—' %></td>
-            <td><span class="badge badge-info"><%= c.subscription_tier %></span></td>
-            <td class="small muted"><%= c.last_checkin ? new Date(c.last_checkin).toLocaleDateString() : 'Never' %></td>
-            <td><% if (c.open_alerts) { %><span class="badge badge-danger"><%= c.open_alerts %></span><% } else { %><span class="small muted">—</span><% } %></td>
-            <td><a class="btn btn-secondary btn-sm" href="/support/user/<%= c.id %>?tab=mood">Mood</a>
-                <a class="btn btn-secondary btn-sm" href="/support/user/<%= c.id %>?tab=wellness">Wellness</a></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+    <div class="support-scroll">
+      <table>
+        <thead>
+          <tr><th>Client</th><th>Contact</th><th>Tier</th><th>Last check-in</th><th>Open alerts</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% clients.forEach(c => { %>
+            <tr>
+              <td><a href="/support/user/<%= c.id %>"><%= c.full_name || '—' %></a></td>
+              <td class="support-note"><%= c.email || c.phone || '—' %></td>
+              <td><span class="badge badge-info"><%= c.subscription_tier %></span></td>
+              <td class="support-note" style="white-space:nowrap;"><%= c.last_checkin ? new Date(c.last_checkin).toLocaleDateString() : 'Never' %></td>
+              <td><% if (c.open_alerts) { %><span class="badge badge-danger"><%= c.open_alerts %></span><% } else { %><span class="support-note">—</span><% } %></td>
+              <td>
+                <div class="support-row" style="flex-wrap:nowrap;">
+                  <a class="btn btn-secondary btn-sm" href="/support/user/<%= c.id %>?tab=mood">Mood</a>
+                  <a class="btn btn-secondary btn-sm" href="/support/user/<%= c.id %>?tab=wellness">Wellness</a>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   <% } %>
 </div>
