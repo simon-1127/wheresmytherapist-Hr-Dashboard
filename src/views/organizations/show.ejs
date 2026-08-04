@@ -100,7 +100,10 @@
   <div class="card">
     <div class="card-header"><h2>HR contacts</h2></div>
     <% if (!hrContacts.length) { %>
-      <div class="empty-state">No HR contact set up yet.</div>
+      <div class="empty-state">
+        No HR contact set up yet — nobody can log in to the HR portal for this organization.
+        Add one below; a temporary password is generated and emailed automatically.
+      </div>
     <% } else { %>
       <table>
         <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Last login</th><th></th></tr></thead>
@@ -112,11 +115,21 @@
               <td><span class="badge <%= c.status === 'active' ? 'badge-success' : 'badge-neutral' %>"><%= c.status %></span> <% if (c.must_reset_password) { %><span class="badge badge-warn">must reset password</span><% } %></td>
               <td class="small muted"><%= c.last_login_at ? new Date(c.last_login_at).toLocaleString() : 'never' %></td>
               <td>
-                <% if (c.status === 'active') { %>
-                  <form method="POST" action="/organizations/<%= org.id %>/hr-contacts/<%= c.id %>/disable">
-                    <button class="btn btn-secondary btn-sm" type="submit">Disable</button>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <form method="POST" action="/organizations/<%= org.id %>/hr-contacts/<%= c.id %>/reissue-password"
+                        onsubmit="return confirm('Issue a new temporary password? Their current password stops working immediately.');">
+                    <button class="btn btn-secondary btn-sm" type="submit">Reissue password</button>
                   </form>
-                <% } %>
+                  <% if (c.status === 'active') { %>
+                    <form method="POST" action="/organizations/<%= org.id %>/hr-contacts/<%= c.id %>/disable">
+                      <button class="btn btn-secondary btn-sm" type="submit">Disable</button>
+                    </form>
+                  <% } else { %>
+                    <form method="POST" action="/organizations/<%= org.id %>/hr-contacts/<%= c.id %>/enable">
+                      <button class="btn btn-secondary btn-sm" type="submit">Enable</button>
+                    </form>
+                  <% } %>
+                </div>
               </td>
             </tr>
           <% }) %>

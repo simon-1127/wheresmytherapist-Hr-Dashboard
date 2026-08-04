@@ -14,6 +14,8 @@ const hrPortalRoutes = require('./routes/hrPortal.routes');
 const supportRoutes = require('./routes/support.routes');
 const onboardingRoutes = require('./routes/onboarding.routes');
 
+const { verifyMailer } = require('./config/mailer');
+
 const app = express();
 app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
@@ -133,4 +135,14 @@ app.use((err, req, res, next) => {
 const port = process.env.PORT || 3100;
 app.listen(port, () => {
   console.log(`WMT HR dashboard listening on :${port}`);
+  // Surfaces a broken SMTP config in the deploy logs rather than in a
+  // "the SPOC never got their password" report days later.
+  verifyMailer();
+});
+
+// Last-resort net. Nothing should reach here now that sendMail swallows its
+// own failures, but an unhandled rejection silently exiting the process is
+// how a mail timeout took the whole dashboard down.
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] unhandled promise rejection — staying up:', reason);
 });

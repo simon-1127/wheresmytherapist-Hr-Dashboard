@@ -8,9 +8,6 @@
     </div>
   </div>
   <div class="pill-nav">
-    <% if (user.role === 'client' && user.status !== 'deleted') { %>
-      <a class="btn btn-secondary" href="/onboarding/upgrade/<%= user.id %>">Upgrade to provider</a>
-    <% } %>
     <% if (user.status !== 'suspended') { %>
       <form method="POST" action="/users/<%= user.id %>/status">
         <input type="hidden" name="status" value="suspended" />

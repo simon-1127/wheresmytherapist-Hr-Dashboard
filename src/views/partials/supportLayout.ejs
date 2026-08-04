@@ -97,16 +97,28 @@
     }
     .emoji-trigger:hover { background: #f9fafb; }
     .emoji-pop {
-      position: absolute; z-index: 60; width: 268px; max-height: 232px; overflow-y: auto;
+      position: absolute; z-index: 60; width: 320px; max-height: 300px; overflow-y: auto;
       background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
       box-shadow: 0 10px 24px rgba(0,0,0,.12); padding: 8px;
     }
     .emoji-pop-group { font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
       color: #9ca3af; margin: 6px 0 4px 4px; }
-    .emoji-pop-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
-    .emoji-pop button {
-      border: 0; background: transparent; font-size: 19px; line-height: 1;
-      padding: 4px 0; border-radius: 6px; cursor: pointer;
+    .emoji-pop-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; }
+    /* Each cell carries its name under the glyph. On a machine with no
+       emoji font the glyphs are all identical tofu boxes, and a grid of
+       those is unusable — the name is what makes it pickable. */
+    .emoji-pop-cell {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      border: 0; background: transparent; padding: 5px 2px; border-radius: 6px;
+      cursor: pointer; width: 100%;
+    }
+    .emoji-pop-cell .g { font-size: 19px; line-height: 1.1; }
+    .emoji-pop-cell .n { font-size: 9px; color: #6b7280; line-height: 1.1; text-align: center; }
+    .emoji-pop-cell:hover { background: #eef2ff; }
+    .emoji-pop-search { width: 100%; margin-bottom: 6px; font-size: 13px; padding: 5px 8px; }
+    .emoji-font-warning {
+      background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+      border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px;
     }
     .emoji-pop button:hover { background: #eef2ff; }
     .emoji-pop .emoji-clear {
@@ -161,46 +173,108 @@
     // Emoji palette for the check-in question editor. Deliberately curated
     // and offline — a full picker library would be a lot of weight for a
     // field that only ever needs a mood face.
+    //
+    // Every entry carries a name. Linux desktops frequently ship without a
+    // colour emoji font, and there the glyphs all render as identical empty
+    // boxes; the names are what keep the picker usable, and they double as
+    // the search index.
     (function () {
       var GROUPS = [
-        ['Mood', ['\u{1F600}','\u{1F642}','\u{1F60A}','\u{1F60C}','\u{1F970}','\u{1F929}','\u{1F60D}','\u{1F917}',
-                  '\u{1F610}','\u{1F614}','\u{1F615}','\u{1F641}','\u{2639}\u{FE0F}','\u{1F62B}','\u{1F625}','\u{1F622}',
-                  '\u{1F62D}','\u{1F630}','\u{1F628}','\u{1F631}','\u{1F620}','\u{1F621}','\u{1F644}','\u{1F62C}',
-                  '\u{1F971}','\u{1F634}','\u{1F92F}','\u{1F975}','\u{1F976}','\u{1F912}','\u{1F915}','\u{1F927}']],
-        ['Energy & body', ['\u{26A1}','\u{1F525}','\u{1F31E}','\u{1F327}\u{FE0F}','\u{1F319}','\u{2601}\u{FE0F}','\u{1F308}','\u{2728}',
-                  '\u{1F9E0}','\u{2764}\u{FE0F}','\u{1F494}','\u{1F4AA}','\u{1F6CC}','\u{1F6B6}','\u{1F3C3}','\u{1F9D8}',
-                  '\u{1F35C}','\u{1F957}','\u{1F4A7}','\u{2615}']],
-        ['Signals', ['\u{1F44D}','\u{1F44E}','\u{2705}','\u{274C}','\u{2B50}','\u{1F3AF}','\u{1F4C8}','\u{1F4C9}',
-                  '\u{1F195}','\u{2757}','\u{2753}','\u{1F4AC}','\u{1F4DD}','\u{1F514}','\u{1F464}','\u{1F46A}']]
+        ['Mood', [
+          ['\u{1F600}', 'happy'], ['\u{1F642}', 'slight smile'], ['\u{1F60A}', 'content'],
+          ['\u{1F60C}', 'relieved'], ['\u{1F970}', 'loved'], ['\u{1F929}', 'excited'],
+          ['\u{1F60D}', 'adoring'], ['\u{1F917}', 'hugging'], ['\u{1F610}', 'neutral'],
+          ['\u{1F614}', 'pensive'], ['\u{1F615}', 'unsure'], ['\u{1F641}', 'sad'],
+          ['\u{2639}\u{FE0F}', 'frowning'], ['\u{1F62B}', 'exhausted'], ['\u{1F625}', 'sad relief'],
+          ['\u{1F622}', 'crying'], ['\u{1F62D}', 'sobbing'], ['\u{1F630}', 'anxious'],
+          ['\u{1F628}', 'fearful'], ['\u{1F631}', 'panicked'], ['\u{1F620}', 'angry'],
+          ['\u{1F621}', 'furious'], ['\u{1F644}', 'eye roll'], ['\u{1F62C}', 'grimacing'],
+          ['\u{1F971}', 'yawning'], ['\u{1F634}', 'sleeping'], ['\u{1F92F}', 'overwhelmed'],
+          ['\u{1F975}', 'overheated'], ['\u{1F976}', 'cold'], ['\u{1F912}', 'unwell'],
+          ['\u{1F915}', 'in pain'], ['\u{1F927}', 'sneezing']
+        ]],
+        ['Energy & body', [
+          ['\u{26A1}', 'energised'], ['\u{1F525}', 'fired up'], ['\u{1F31E}', 'bright'],
+          ['\u{1F327}\u{FE0F}', 'low'], ['\u{1F319}', 'night'], ['\u{2601}\u{FE0F}', 'cloudy'],
+          ['\u{1F308}', 'hopeful'], ['\u{2728}', 'good day'], ['\u{1F9E0}', 'mind'],
+          ['\u{2764}\u{FE0F}', 'heart'], ['\u{1F494}', 'hurt'], ['\u{1F4AA}', 'strong'],
+          ['\u{1F6CC}', 'resting'], ['\u{1F6B6}', 'walking'], ['\u{1F3C3}', 'exercise'],
+          ['\u{1F9D8}', 'meditation'], ['\u{1F35C}', 'ate well'], ['\u{1F957}', 'healthy food'],
+          ['\u{1F4A7}', 'hydration'], ['\u{2615}', 'caffeine']
+        ]],
+        ['Signals', [
+          ['\u{1F44D}', 'yes'], ['\u{1F44E}', 'no'], ['\u{2705}', 'done'],
+          ['\u{274C}', 'not done'], ['\u{2B50}', 'favourite'], ['\u{1F3AF}', 'on target'],
+          ['\u{1F4C8}', 'improving'], ['\u{1F4C9}', 'declining'], ['\u{1F195}', 'new'],
+          ['\u{2757}', 'important'], ['\u{2753}', 'unsure'], ['\u{1F4AC}', 'talked'],
+          ['\u{1F4DD}', 'journalled'], ['\u{1F514}', 'reminder'], ['\u{1F464}', 'alone'],
+          ['\u{1F46A}', 'with people']
+        ]]
       ];
       var pop = null;
 
       function close() { if (pop) { pop.remove(); pop = null; } }
 
+      function build(input, filter) {
+        var body = pop.querySelector('.emoji-pop-body');
+        body.innerHTML = '';
+        var term = (filter || '').trim().toLowerCase();
+        var shown = 0;
+
+        GROUPS.forEach(function (g) {
+          var matches = g[1].filter(function (e) { return !term || e[1].indexOf(term) !== -1; });
+          if (!matches.length) return;
+          shown += matches.length;
+
+          var label = document.createElement('div');
+          label.className = 'emoji-pop-group';
+          label.textContent = g[0];
+          body.appendChild(label);
+
+          var grid = document.createElement('div');
+          grid.className = 'emoji-pop-grid';
+          matches.forEach(function (e) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'emoji-pop-cell';
+            b.title = e[1];
+            b.innerHTML = '<span class="g"></span><span class="n"></span>';
+            b.querySelector('.g').textContent = e[0];
+            b.querySelector('.n').textContent = e[1];
+            b.addEventListener('click', function () { input.value = e[0]; close(); });
+            grid.appendChild(b);
+          });
+          body.appendChild(grid);
+        });
+
+        if (!shown) {
+          var none = document.createElement('div');
+          none.className = 'emoji-pop-group';
+          none.textContent = 'No match';
+          body.appendChild(none);
+        }
+      }
+
       function open(trigger) {
         close();
-        var targetId = trigger.getAttribute('data-emoji-target');
-        var input = document.getElementById(targetId);
+        var input = document.getElementById(trigger.getAttribute('data-emoji-target'));
         if (!input) return;
 
         pop = document.createElement('div');
         pop.className = 'emoji-pop';
-        GROUPS.forEach(function (g) {
-          var label = document.createElement('div');
-          label.className = 'emoji-pop-group';
-          label.textContent = g[0];
-          pop.appendChild(label);
-          var grid = document.createElement('div');
-          grid.className = 'emoji-pop-grid';
-          g[1].forEach(function (e) {
-            var b = document.createElement('button');
-            b.type = 'button';
-            b.textContent = e;
-            b.addEventListener('click', function () { input.value = e; close(); });
-            grid.appendChild(b);
-          });
-          pop.appendChild(grid);
-        });
+
+        var search = document.createElement('input');
+        search.type = 'text';
+        search.className = 'emoji-pop-search';
+        search.placeholder = 'Search by name, e.g. anxious';
+        search.addEventListener('input', function () { build(input, search.value); });
+        search.addEventListener('click', function (ev) { ev.stopPropagation(); });
+        pop.appendChild(search);
+
+        var body = document.createElement('div');
+        body.className = 'emoji-pop-body';
+        pop.appendChild(body);
+
         var clear = document.createElement('button');
         clear.type = 'button';
         clear.className = 'emoji-clear';
@@ -209,11 +283,12 @@
         pop.appendChild(clear);
 
         document.body.appendChild(pop);
+        build(input, '');
+
         var r = trigger.getBoundingClientRect();
-        var top = r.bottom + window.scrollY + 6;
-        var left = Math.min(r.left + window.scrollX, window.innerWidth - 280);
-        pop.style.top = top + 'px';
-        pop.style.left = Math.max(8, left) + 'px';
+        pop.style.top = (r.bottom + window.scrollY + 6) + 'px';
+        pop.style.left = Math.max(8, Math.min(r.left + window.scrollX, window.innerWidth - 332)) + 'px';
+        search.focus();
       }
 
       document.addEventListener('click', function (ev) {
@@ -222,6 +297,38 @@
         if (pop && !ev.target.closest('.emoji-pop')) close();
       });
       document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
+
+      // Detect a missing colour emoji font by drawing one and checking
+      // whether the result has any colour in it. A tofu box is monochrome.
+      // Anything unexpected is treated as "supported" so this can only ever
+      // fail quiet, never nag wrongly.
+      function emojiRenders() {
+        try {
+          var c = document.createElement('canvas');
+          if (!c.getContext) return true;
+          c.width = c.height = 32;
+          var ctx = c.getContext('2d');
+          ctx.textBaseline = 'top';
+          ctx.font = '28px sans-serif';
+          ctx.fillText('\u{1F600}', 0, 0);
+          var d = ctx.getImageData(14, 14, 1, 1).data;
+          if (d[3] === 0) return false;
+          return !(d[0] === d[1] && d[1] === d[2]);
+        } catch (e) { return true; }
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        if (!document.querySelector('.emoji-trigger') || emojiRenders()) return;
+        var main = document.querySelector('.support-main');
+        if (!main) return;
+        var warn = document.createElement('div');
+        warn.className = 'emoji-font-warning';
+        warn.textContent =
+          'This computer has no colour emoji font installed, so emoji show as empty boxes here. ' +
+          'They are stored correctly and will display properly in the mobile app. ' +
+          'Pick by name in the picker, or install an emoji font (on Arch: pacman -S noto-fonts-emoji).';
+        main.insertBefore(warn, main.firstChild);
+      });
     })();
   </script>
 </body>

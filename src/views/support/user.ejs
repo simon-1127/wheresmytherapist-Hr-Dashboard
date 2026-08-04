@@ -279,10 +279,10 @@
         <textarea id="w-summary" name="summary" rows="4" style="width:100%;" placeholder="Plain-language summary the client will read."></textarea>
       </div>
 
-      <div style="margin-top:12px;">
-        <label class="small muted" for="w-metrics">Metrics (JSON) — prefilled from this client's check-in data</label>
-        <textarea id="w-metrics" name="metrics_json" rows="8" style="width:100%; font-family:monospace; font-size:12px;"><%= JSON.stringify(suggestedMetrics, null, 2) %></textarea>
-      </div>
+      <p class="support-note" style="margin-top:12px;">
+        Check-in figures for this period — latest and average scores, week-on-week trend, and journal
+        mood-tag counts — are attached automatically from this client's own data.
+      </p>
 
       <div style="margin-top:12px;">
         <label class="small muted" for="w-file">File URL (optional)</label>

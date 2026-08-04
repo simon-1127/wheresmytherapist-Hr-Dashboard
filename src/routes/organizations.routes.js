@@ -347,4 +347,83 @@ router.post('/:id/hr-contacts/:contactId/disable', async (req, res) => {
   res.redirect(`/organizations/${id}`);
 });
 
+// A temp password is shown exactly once, at creation. If it is lost —
+// missed flash, undelivered mail, contact changed jobs — there was no way
+// back: organization_hr_contacts.email is UNIQUE, so the same address
+// cannot simply be added again. This reissues instead.
+router.post('/:id/hr-contacts/:contactId/reissue-password', async (req, res) => {
+  const { id, contactId } = req.params;
+
+  const { data: contact } = await supabase
+    .from('organization_hr_contacts')
+    .select('id, email, name, org_id')
+    .eq('id', contactId)
+    .eq('org_id', id)
+    .maybeSingle();
+
+  if (!contact) {
+    req.setFlash({ type: 'error', message: 'No such HR contact for this organization.' });
+    return res.redirect(`/organizations/${id}?tab=hr`);
+  }
+
+  const tempPassword = generateTempPassword();
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+  const { error } = await supabase
+    .from('organization_hr_contacts')
+    .update({ password_hash: passwordHash, must_reset_password: true })
+    .eq('id', contactId);
+
+  if (error) {
+    req.setFlash({ type: 'error', message: 'Could not reissue the password — ' + error.message });
+    return res.redirect(`/organizations/${id}?tab=hr`);
+  }
+
+  try {
+    await sendMail({
+      to: contact.email,
+      subject: "Your Where's My Therapist HR portal password was reset",
+      html: `<p>Hi ${contact.name || ''},</p>
+        <p>A new temporary password has been issued for your HR portal account.</p>
+        <p>Login email: <strong>${contact.email}</strong><br/>
+        Temporary password: <strong>${tempPassword}</strong></p>
+        <p>You'll be asked to set your own password on first login. Any previous password no longer works.</p>`,
+    });
+  } catch (err) {
+    // The password has already changed at this point, so a mail failure
+    // must not look like the whole thing failed — the flash below still
+    // shows the value, which is the reliable channel anyway.
+    console.error('[organizations] HR reissue email failed:', err);
+  }
+
+  await logAction({
+    adminId: req.session.superAdmin.id,
+    action: 'hr_contact.password_reissued',
+    targetTable: 'organization_hr_contacts',
+    targetId: contactId,
+    details: { email: contact.email },
+  });
+
+  req.setFlash({
+    type: 'success',
+    message: `New temp password for ${contact.email} (shown once): ${tempPassword}`,
+  });
+  res.redirect(`/organizations/${id}?tab=hr`);
+});
+
+// Disable had no counterpart, which left an accidentally disabled contact
+// permanently locked out for the same UNIQUE-email reason.
+router.post('/:id/hr-contacts/:contactId/enable', async (req, res) => {
+  const { id, contactId } = req.params;
+  await supabase.from('organization_hr_contacts').update({ status: 'active' }).eq('id', contactId).eq('org_id', id);
+  await logAction({
+    adminId: req.session.superAdmin.id,
+    action: 'hr_contact.enabled',
+    targetTable: 'organization_hr_contacts',
+    targetId: contactId,
+  });
+  req.setFlash({ type: 'success', message: 'HR contact re-enabled.' });
+  res.redirect(`/organizations/${id}?tab=hr`);
+});
+
 module.exports = router;

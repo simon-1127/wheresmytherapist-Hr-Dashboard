@@ -446,7 +446,6 @@ router.get(
       journalTags,
       streak,
       reports,
-      suggestedMetrics: q.summarizeMetrics({ series, history, journalTags }),
     });
   }),
 );
@@ -459,7 +458,7 @@ router.post(
     const { userId } = req.params;
     const {
       title, summary, report_period_start: start, report_period_end: end,
-      file_url: fileUrl, visible_to_client: visible, metrics_json: metricsJson,
+      file_url: fileUrl, visible_to_client: visible,
     } = req.body;
 
     if (!title || !start || !end) {
@@ -471,17 +470,26 @@ router.post(
       return res.redirect(`/support/user/${userId}?tab=wellness`);
     }
 
-    // The metrics box is prefilled with generated JSON, but an agent can
-    // edit it — so bad JSON is a user error to report, not a 500.
-    let metrics = {};
-    if (metricsJson && metricsJson.trim()) {
-      try {
-        metrics = JSON.parse(metricsJson);
-      } catch (err) {
-        req.setFlash({ type: 'error', message: 'Metrics field is not valid JSON.' });
-        return res.redirect(`/support/user/${userId}?tab=wellness`);
-      }
-    }
+    // Metrics are derived here, not posted. They're a summary of the
+    // client's own check-ins, so letting an agent hand-edit the blob would
+    // only allow it to contradict the data it claims to describe.
+    //
+    // Recomputed over the report's own period rather than reusing whatever
+    // window the page happened to be showing, so the figures match the dates
+    // on the report.
+    const periodDays = Math.max(
+      1,
+      Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1,
+    );
+    const [periodHistory, periodTags] = await Promise.all([
+      q.getMoodHistory({ userId, days: periodDays }),
+      q.getJournalMoodTags({ userId, days: periodDays }),
+    ]);
+    const metrics = q.summarizeMetrics({
+      series: q.buildMoodSeries(periodHistory),
+      history: periodHistory,
+      journalTags: periodTags,
+    });
 
     const created = await q.createWellnessReport({
       clientId: userId,

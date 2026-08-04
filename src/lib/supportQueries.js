@@ -414,20 +414,53 @@ async function setReportVisibility({ reportId, visible }) {
  * Pre-fills the metrics jsonb of a new report from the check-in data that's
  * already on file, so an agent isn't retyping numbers the DB already knows.
  */
+/**
+ * Builds the metrics jsonb for a wellness report from the client's own
+ * check-in data. Agents never see or edit this — it is derived, so hand
+ * editing it would only let it drift from the data it claims to summarize.
+ *
+ * The `overview` and `headline_score` keys are not decorative. The
+ * client-facing get_my_wellness_reports() function filters metrics by the
+ * client's tier: 'full' returns everything, but 'partial' returns ONLY
+ * those two keys and drops the rest. Without them, every partial-tier
+ * client would open their report to an empty metrics object.
+ */
 function summarizeMetrics({ series, history, journalTags }) {
-  const metrics = {
+  // The first check-in question is the headline one — series follows the
+  // questions' order_index, which is the order clients answer them in.
+  const headline = series[0] || null;
+  const round = (n) => (n === null || n === undefined ? null : Number(n.toFixed(2)));
+  const trendOf = (s) =>
+    s.delta === null ? 'unknown' : s.delta > 0.25 ? 'up' : s.delta < -0.25 ? 'down' : 'flat';
+
+  return {
+    // Visible on every tier.
+    overview: {
+      checkins_in_period: history.length,
+      headline_question: headline ? headline.label : null,
+      trend: headline ? trendOf(headline) : 'unknown',
+    },
+    headline_score: headline
+      ? {
+          question: headline.label,
+          latest: headline.latest,
+          recent_7d_average: round(headline.recentAvg),
+          scale: `${headline.min ?? 0}-${headline.max ?? 10}`,
+        }
+      : null,
+
+    // Full-tier only.
     checkins_in_period: history.length,
     sliders: series.map((s) => ({
       question: s.label,
       latest: s.latest,
-      average: s.average === null ? null : Number(s.average.toFixed(2)),
-      recent_7d_average: s.recentAvg === null ? null : Number(s.recentAvg.toFixed(2)),
-      trend: s.delta === null ? 'unknown' : s.delta > 0.25 ? 'up' : s.delta < -0.25 ? 'down' : 'flat',
+      average: round(s.average),
+      recent_7d_average: round(s.recentAvg),
+      trend: trendOf(s),
       scale: `${s.min ?? 0}-${s.max ?? 10}`,
     })),
     journal_mood_tags: journalTags.map((t) => ({ tag: t.mood_tag, count: t.n })),
   };
-  return metrics;
 }
 
 // ------------------------------------------------- check-in questions ---
@@ -618,6 +651,7 @@ async function deleteOptionIfUnused(optionId) {
   await query('DELETE FROM survey_question_options WHERE id = $1', [optionId]);
   return { deleted: true, questionId: use[0].question_id };
 }
+
 
 module.exports = {
   logSupportAction,
