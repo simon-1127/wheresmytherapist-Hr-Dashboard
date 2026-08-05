@@ -11,6 +11,8 @@ router.get('/', requireSuperAdmin, async (req, res) => {
     { count: activeEmployees },
     { count: pendingLeave },
     { count: pendingKyc },
+    { data: approvedGendocs },
+    { data: activeAssignments },
     { data: orgs },
     { data: recentAudit },
   ] = await Promise.all([
@@ -28,6 +30,16 @@ router.get('/', requireSuperAdmin, async (req, res) => {
       .from('provider_profiles')
       .select('user_id', { count: 'exact', head: true })
       .in('application_status', ['submitted', 'under_review']),
+    // Approved doctors nobody can actually reach yet. A doctor with no
+    // active org assignment is invisible to every employee, which is easy
+    // to create and impossible to spot from the doctors list alone.
+    //
+    // Two plain reads differenced in JS rather than a PostgREST anti-join
+    // — the embedded-null filter form is fragile and silently returns the
+    // wrong count when it doesn't match, which is worse than an extra
+    // round trip on a page that already makes seven.
+    supabase.from('gendoc_profiles').select('user_id').eq('application_status', 'approved'),
+    supabase.from('gendoc_org_assignments').select('gendoc_id').eq('is_active', true),
     supabase
       .from('organizations')
       .select('id, company_name, spoc_name, status, created_at')
@@ -39,6 +51,9 @@ router.get('/', requireSuperAdmin, async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(6),
   ]);
+
+  const assignedGendocIds = new Set((activeAssignments || []).map((a) => a.gendoc_id));
+  const unassignedGendocs = (approvedGendocs || []).filter((g) => !assignedGendocIds.has(g.user_id)).length;
 
   // Employee counts per org, for the table below
   let employeeCounts = {};
@@ -62,6 +77,7 @@ router.get('/', requireSuperAdmin, async (req, res) => {
       activeEmployees: activeEmployees || 0,
       pendingLeave: pendingLeave || 0,
       pendingKyc: pendingKyc || 0,
+      unassignedGendocs,
     },
     orgs: orgs || [],
     employeeCounts,

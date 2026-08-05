@@ -1,0 +1,106 @@
+<div class="topbar">
+  <div>
+    <h1>General doctors</h1>
+    <div class="subtitle">Contracted physicians serving specific client organizations.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>Add a doctor</h2></div>
+  <p class="small muted">
+    Creates a new account with a temporary password, emailed to them. They set their own password and
+    complete the rest of their profile in the app. Assign their organizations once the account exists —
+    a doctor with no assigned organization is visible to nobody.
+  </p>
+  <form method="POST" action="/gendocs">
+    <div class="grid grid-2col">
+      <div class="field">
+        <label for="gd_email">Email</label>
+        <input type="email" id="gd_email" name="email" required />
+      </div>
+      <div class="field">
+        <label for="gd_name">Full name</label>
+        <input type="text" id="gd_name" name="full_name" required />
+      </div>
+      <div class="field">
+        <label for="gd_title">Professional title</label>
+        <input type="text" id="gd_title" name="professional_title" placeholder="MBBS, General Physician" />
+      </div>
+      <div class="field">
+        <label for="gd_reg">Registration number</label>
+        <input type="text" id="gd_reg" name="registration_no" placeholder="Medical council registration" />
+      </div>
+      <div class="field">
+        <label for="gd_council">Registration council</label>
+        <input type="text" id="gd_council" name="registration_council" placeholder="e.g. Delhi Medical Council" />
+      </div>
+    </div>
+    <button class="btn btn-primary" type="submit">Create account &amp; invite</button>
+  </form>
+</div>
+
+<div class="tabs" style="margin-top:16px;">
+  <a class="tab <%= filter === 'all' ? 'active' : '' %>" href="/gendocs?status=all">All</a>
+  <a class="tab <%= filter === 'draft' ? 'active' : '' %>" href="/gendocs?status=draft">Onboarding</a>
+  <a class="tab <%= filter === 'pending_review' ? 'active' : '' %>" href="/gendocs?status=pending_review">Pending review</a>
+  <a class="tab <%= filter === 'approved' ? 'active' : '' %>" href="/gendocs?status=approved">Approved</a>
+  <a class="tab <%= filter === 'rejected' ? 'active' : '' %>" href="/gendocs?status=rejected">Rejected</a>
+</div>
+
+<div class="card">
+  <% if (!gendocs.length) { %>
+    <div class="empty-state">No doctors yet.</div>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Title</th>
+          <th>Registration</th>
+          <th>Organizations</th>
+          <th>Status</th>
+          <th>Queue</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% gendocs.forEach(g => { %>
+          <%
+            const active = (g.gendoc_org_assignments || []).filter(a => a.is_active);
+          %>
+          <tr>
+            <td><a href="/gendocs/<%= g.user_id %>"><%= g.full_name %></a></td>
+            <td class="small muted"><%= g.professional_title %></td>
+            <td class="small muted"><%= g.registration_no || '—' %></td>
+            <td class="small">
+              <% if (!active.length) { %>
+                <span class="badge badge-neutral">Unassigned</span>
+              <% } else { %>
+                <%= active.map(a => a.organizations && a.organizations.company_name).filter(Boolean).join(', ') %>
+              <% } %>
+            </td>
+            <td>
+              <span class="badge <%= g.application_status === 'approved' ? 'badge-success' : 'badge-info' %>"><%= g.application_status %></span>
+            </td>
+            <td>
+              <span class="badge <%= g.is_accepting_queue ? 'badge-success' : 'badge-neutral' %>">
+                <%= g.is_accepting_queue ? 'Open' : 'Closed' %>
+              </span>
+            </td>
+            <td><a class="btn btn-secondary btn-sm" href="/gendocs/<%= g.user_id %>">Manage</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<% if (!orgs.length) { %>
+  <div class="card" style="margin-top:16px;">
+    <p class="small muted" style="margin:0;">
+      No organization currently has the general doctor feature enabled. It's switched on automatically for
+      organizations on the HR-Onboarding plan — set that on the organization first, or doctors will have
+      nowhere to be assigned.
+    </p>
+  </div>
+<% } %>

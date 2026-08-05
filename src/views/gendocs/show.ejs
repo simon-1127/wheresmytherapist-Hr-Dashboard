@@ -1,0 +1,186 @@
+<div class="topbar">
+  <div>
+    <h1><%= gendoc.full_name %></h1>
+    <div class="subtitle">
+      <%= gendoc.professional_title %>
+      <% if (user && user.email) { %> &middot; <%= user.email %><% } %>
+    </div>
+  </div>
+  <div>
+    <a class="btn btn-secondary btn-sm" href="/gendocs">Back to doctors</a>
+  </div>
+</div>
+
+<div class="grid grid-2col">
+  <div class="card">
+    <div class="card-header"><h2>Status</h2></div>
+    <table>
+      <tbody>
+        <tr>
+          <td class="small muted">Application</td>
+          <td><span class="badge <%= gendoc.application_status === 'approved' ? 'badge-success' : 'badge-info' %>"><%= gendoc.application_status %></span></td>
+        </tr>
+        <tr>
+          <td class="small muted">Profile completed</td>
+          <td class="small"><%= gendoc.profile_completed_by_gendoc ? 'Yes' : 'Not yet' %></td>
+        </tr>
+        <tr>
+          <td class="small muted">Password set</td>
+          <td class="small"><%= gendoc.password_set_by_gendoc ? 'Yes' : 'Still on temp password' %></td>
+        </tr>
+        <tr>
+          <td class="small muted">Registration</td>
+          <td class="small"><%= gendoc.registration_no || '—' %><% if (gendoc.registration_council) { %> (<%= gendoc.registration_council %>)<% } %></td>
+        </tr>
+        <tr>
+          <td class="small muted">Experience</td>
+          <td class="small"><%= gendoc.years_experience %> yrs</td>
+        </tr>
+        <tr>
+          <td class="small muted">Consultation length</td>
+          <td class="small"><%= gendoc.consultation_minutes %> min</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <% if (['submitted','under_review','draft'].includes(gendoc.application_status)) { %>
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <form method="POST" action="/gendocs/<%= gendoc.user_id %>/decision">
+          <input type="hidden" name="decision" value="approved" />
+          <button class="btn btn-primary btn-sm" type="submit">Approve</button>
+        </form>
+        <form method="POST" action="/gendocs/<%= gendoc.user_id %>/decision" onsubmit="return confirm('Reject this doctor?');">
+          <input type="hidden" name="decision" value="rejected" />
+          <input type="hidden" name="rejection_reason" value="Rejected by admin" />
+          <button class="btn btn-danger btn-sm" type="submit">Reject</button>
+        </form>
+      </div>
+      <% if (!gendoc.profile_completed_by_gendoc) { %>
+        <p class="small muted" style="margin-top:8px;">
+          This doctor hasn't filled in their own profile yet — the values above are placeholders.
+          Approving now is fine, but the details clients see will be whatever they enter later.
+        </p>
+      <% } %>
+    <% } %>
+
+    <div style="margin-top:12px;">
+      <form method="POST" action="/gendocs/<%= gendoc.user_id %>/accepting">
+        <input type="hidden" name="accepting" value="<%= gendoc.is_accepting_queue ? 'false' : 'true' %>" />
+        <button class="btn btn-secondary btn-sm" type="submit">
+          <%= gendoc.is_accepting_queue ? 'Close queue to new requests' : 'Reopen queue' %>
+        </button>
+      </form>
+      <p class="small muted" style="margin-top:6px;">
+        Closing the queue stops new requests. Anyone already waiting keeps their place.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Working hours</h2></div>
+    <% if (!schedule) { %>
+      <div class="empty-state">No schedule saved yet.</div>
+    <% } else { %>
+      <table>
+        <tbody>
+          <tr><td class="small muted">Day</td><td class="small"><%= schedule.day_start %> &ndash; <%= schedule.day_end %></td></tr>
+          <tr>
+            <td class="small muted">Lunch</td>
+            <td class="small"><%= schedule.lunch_start ? schedule.lunch_start + ' – ' + schedule.lunch_end : 'None set' %></td>
+          </tr>
+          <tr>
+            <td class="small muted">Working days</td>
+            <td class="small">
+              <%
+                const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                const days = (schedule.working_days || []).map(d => dayNames[d]).join(', ');
+              %>
+              <%= days || '—' %>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="small muted" style="margin-top:8px;">
+        The doctor sets these in the app. The same hours apply to every working day, and the queue's
+        estimated times are calculated from them.
+      </p>
+    <% } %>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Organizations</h2></div>
+  <p class="small muted">
+    A doctor is only visible to employees of the organizations listed here. Removing one hides the
+    doctor from that organization's employees immediately.
+  </p>
+
+  <%
+    const activeAssignments = (assignments || []).filter(a => a.is_active);
+  %>
+
+  <% if (!activeAssignments.length) { %>
+    <div class="empty-state">Not assigned to any organization yet — no employee can see this doctor.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Organization</th><th>Assigned</th><th></th></tr></thead>
+      <tbody>
+        <% activeAssignments.forEach(a => { %>
+          <tr>
+            <td><%= a.organizations ? a.organizations.company_name : a.org_id %></td>
+            <td class="small muted"><%= a.assigned_at ? new Date(a.assigned_at).toLocaleDateString() : '—' %></td>
+            <td>
+              <form method="POST" action="/gendocs/<%= gendoc.user_id %>/assignments/<%= a.org_id %>/remove"
+                    onsubmit="return confirm('Remove this doctor from that organization?');">
+                <button class="btn btn-danger btn-sm" type="submit">Remove</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+
+  <% if (availableOrgs.length) { %>
+    <form method="POST" action="/gendocs/<%= gendoc.user_id %>/assignments" style="margin-top:12px;">
+      <div class="field">
+        <label>Assign to</label>
+        <% availableOrgs.forEach(o => { %>
+          <label class="small" style="display:block; margin:4px 0;">
+            <input type="checkbox" name="org_id[]" value="<%= o.id %>" /> <%= o.company_name %>
+          </label>
+        <% }) %>
+      </div>
+      <button class="btn btn-primary btn-sm" type="submit">Assign</button>
+    </form>
+  <% } else { %>
+    <p class="small muted" style="margin-top:12px;">
+      Every eligible organization is already assigned. Only organizations with the general doctor
+      feature enabled appear here.
+    </p>
+  <% } %>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Recent queue</h2></div>
+  <p class="small muted">Last 24 hours. Employee identities aren't shown here — consultations are confidential.</p>
+  <% if (!queue.length) { %>
+    <div class="empty-state">No consultations requested.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>#</th><th>Status</th><th>Requested</th><th>Estimated start</th></tr></thead>
+      <tbody>
+        <% queue.forEach(q => { %>
+          <tr>
+            <td class="small"><%= q.position %></td>
+            <td>
+              <span class="badge <%= q.status === 'completed' ? 'badge-success' : q.status === 'waiting' ? 'badge-info' : 'badge-neutral' %>"><%= q.status %></span>
+            </td>
+            <td class="small muted"><%= new Date(q.requested_at).toLocaleString() %></td>
+            <td class="small muted"><%= q.estimated_start ? new Date(q.estimated_start).toLocaleTimeString() : '—' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
