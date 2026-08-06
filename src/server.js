@@ -12,7 +12,7 @@ const providersRoutes = require('./routes/providers.routes');
 const gendocsRoutes = require('./routes/gendocs.routes');
 const settingsRoutes = require('./routes/settings.routes');
 const hrPortalRoutes = require('./routes/hrPortal.routes');
-const hrNotificationsRoutes = require('./routes/hrNotifications.routes');
+const notificationsRoutes = require('./routes/notifications.routes');
 const supportRoutes = require('./routes/support.routes');
 const onboardingRoutes = require('./routes/onboarding.routes');
 
@@ -111,10 +111,8 @@ app.use('/organizations', organizationsRoutes);
 app.use('/users', usersRoutes);
 app.use('/providers', providersRoutes);
 app.use('/gendocs', gendocsRoutes);
+app.use('/notifications', notificationsRoutes);
 app.use('/settings', settingsRoutes);
-// Mounted BEFORE hrPortal.routes so /hr/broadcasts and /hr/automations
-// resolve here. Both routers sit on /hr and Express takes the first match.
-app.use('/hr', hrNotificationsRoutes);
 app.use('/hr', hrPortalRoutes);
 app.use('/support', supportRoutes);
 app.use('/onboarding', onboardingRoutes);

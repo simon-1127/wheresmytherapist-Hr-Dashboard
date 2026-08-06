@@ -1,13 +1,29 @@
 <div class="topbar">
   <div>
     <h1>Broadcasts</h1>
-    <div class="subtitle">Send a message to your team. It appears in their app's notifications tab.</div>
+    <div class="subtitle">Send a message to clients. It appears in their app's notifications tab.</div>
   </div>
 </div>
 
 <div class="card">
   <div class="card-header"><h2>New broadcast</h2></div>
-  <form method="POST" action="/hr/broadcasts">
+  <form method="GET" action="/notifications/broadcasts" style="margin-bottom:16px;">
+    <div class="field">
+      <label for="scope">Who are you sending as</label>
+      <select id="scope" name="org_id" onchange="this.form.submit()">
+        <option value="">Everyone on the platform</option>
+        <% organizations.forEach(o => { %>
+          <option value="<%= o.id %>" <%= selectedOrgId === o.id ? 'selected' : '' %>>
+            <%= o.company_name %> — employees only
+          </option>
+        <% }) %>
+      </select>
+      <div class="field-hint">Changing this recalculates the audience counts below.</div>
+    </div>
+  </form>
+
+  <form method="POST" action="/notifications/broadcasts">
+    <input type="hidden" name="org_id" value="<%= selectedOrgId || '' %>" />
     <div class="field">
       <label for="title">Title</label>
       <input type="text" id="title" name="title" maxlength="80" required
@@ -31,7 +47,7 @@
         <% }) %>
       </select>
       <div class="field-hint">
-        Counts only include employees who have actually signed up. Anyone still showing as
+        Counts only include people who have completed onboarding. An employee still showing as
         <em>invited</em> has no account yet, so there is nowhere to deliver to.
       </div>
     </div>
@@ -51,7 +67,7 @@
   <% } else { %>
     <table>
       <thead>
-        <tr><th>Message</th><th>Audience</th><th>Sent to</th><th>Read</th><th>When</th><th></th></tr>
+        <tr><th>Message</th><th>Scope</th><th>Audience</th><th>Sent to</th><th>Read</th><th>When</th><th></th></tr>
       </thead>
       <tbody>
         <% broadcasts.forEach(b => { %>
@@ -60,6 +76,7 @@
               <strong><%= b.title %></strong>
               <div class="small muted"><%= b.body.length > 90 ? b.body.slice(0, 90) + '…' : b.body %></div>
             </td>
+            <td class="small"><%= b.org_id ? (orgNames[b.org_id] || 'Organization') : 'Platform-wide' %></td>
             <td class="small"><%= b.audience %></td>
             <td><%= b.recipient_count %></td>
             <td>
@@ -70,7 +87,7 @@
             </td>
             <td class="small muted"><%= new Date(b.created_at).toLocaleString() %></td>
             <td>
-              <form method="POST" action="/hr/broadcasts/<%= b.id %>/delete"
+              <form method="POST" action="/notifications/broadcasts/<%= b.id %>/delete"
                     onsubmit="return confirm('Delete this broadcast and remove it from everyone\'s inbox?');">
                 <button class="btn btn-secondary btn-sm" type="submit">Delete</button>
               </form>

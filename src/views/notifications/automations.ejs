@@ -1,15 +1,32 @@
 <div class="topbar">
   <div>
     <h1>Automations</h1>
-    <div class="subtitle">Notifications that send themselves, on your organization's behalf.</div>
+    <div class="subtitle">Notifications the platform sends on its own.</div>
   </div>
 </div>
 
 <div class="card">
+  <form method="GET" action="/notifications/automations">
+    <div class="field">
+      <label for="scope">Rule set</label>
+      <select id="scope" name="org_id" onchange="this.form.submit()">
+        <option value="">Platform-wide — every client</option>
+        <% organizations.forEach(o => { %>
+          <option value="<%= o.id %>" <%= selectedOrgId === o.id ? 'selected' : '' %>>
+            <%= o.company_name %> — employees only
+          </option>
+        <% }) %>
+      </select>
+      <div class="field-hint">
+        Platform-wide is the normal case. An organization override applies to that company's
+        employees only, and is evaluated independently — turning one on does not turn the
+        platform-wide one off.
+      </div>
+    </div>
+  </form>
   <p class="small muted" style="margin:0;">
-    These run every 15 minutes against your employees' own activity. Nobody is told what an
-    individual did — the app decides who matches, sends the message, and never reports back to
-    you who received it.
+    The dispatcher runs every 15 minutes and decides who matches from their own activity.
+    Recipients are never reported back here.
   </p>
 </div>
 
@@ -25,7 +42,8 @@
       </span>
     </div>
 
-    <form method="POST" action="/hr/automations/<%= rule.key %>">
+    <form method="POST" action="/notifications/automations/<%= rule.key %>">
+      <input type="hidden" name="org_id" value="<%= selectedOrgId || '' %>" />
       <div class="field">
         <label>
           <input type="checkbox" name="is_enabled" <%= rule.isEnabled ? 'checked' : '' %> />
