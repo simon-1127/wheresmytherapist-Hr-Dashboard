@@ -4,7 +4,7 @@ const { supabase } = require('../config/supabase');
 const { requireSuperAdmin } = require('../middleware/auth');
 const { logAction } = require('../lib/audit');
 const { generateTempPassword } = require('../lib/passwords');
-const { toArray, toCsvArray, toIntOrNull } = require('../lib/forms');
+const { pickArray, toCsvArray, toIntOrNull } = require('../lib/forms');
 const { sendMail } = require('../config/mailer');
 
 const router = express.Router();
@@ -51,7 +51,7 @@ router.post('/', async (req, res) => {
     spoc_email: b.spoc_email || null,
     spoc_phone: b.spoc_phone || null,
 
-    goals: toArray(b['goals[]']),
+    goals: pickArray(b, 'goals'),
     challenge_ratings: {
       work_stress: toIntOrNull(b.rating_work_stress),
       burnout: toIntOrNull(b.rating_burnout),
@@ -68,11 +68,11 @@ router.post('/', async (req, res) => {
     session_cadence: b.session_cadence || null,
     session_cadence_custom: b.session_cadence === 'custom' ? b.session_cadence_custom : null,
 
-    services_therapy: toArray(b['services_therapy[]']),
-    services_wellness: toArray(b['services_wellness[]']),
-    services_emergency: toArray(b['services_emergency[]']),
+    services_therapy: pickArray(b, 'services_therapy'),
+    services_wellness: pickArray(b, 'services_wellness'),
+    services_emergency: pickArray(b, 'services_emergency'),
 
-    access_methods: toArray(b['access_methods[]']),
+    access_methods: pickArray(b, 'access_methods'),
     auth_method: b.auth_method || null,
 
     confidentiality_agreed: b.confidentiality_agreed === 'on',
@@ -89,7 +89,7 @@ router.post('/', async (req, res) => {
     contract_end: b.contract_end || null,
 
     launch_date: b.launch_date || null,
-    communication_preference: toArray(b['communication_preference[]']),
+    communication_preference: pickArray(b, 'communication_preference'),
     logo_url: b.logo_url || null,
     hr_communication_guidelines_url: b.hr_communication_guidelines_url || null,
 

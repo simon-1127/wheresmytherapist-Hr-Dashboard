@@ -4,7 +4,7 @@ const { requireSuperAdmin } = require('../middleware/auth');
 const { logAction } = require('../lib/audit');
 const { generateTempPassword } = require('../lib/passwords');
 const { sendMail } = require('../config/mailer');
-const { toArray } = require('../lib/forms');
+const { pickArray } = require('../lib/forms');
 
 const router = express.Router();
 router.use(requireSuperAdmin);
@@ -250,9 +250,11 @@ router.post('/:userId/decision', async (req, res) => {
 
 router.post('/:userId/assignments', async (req, res) => {
   const { userId } = req.params;
-  // Checkboxes arrive as a string when one is ticked and an array when
-  // several are — toArray normalizes all three cases including none.
-  const orgIds = toArray(req.body['org_id[]']).filter(Boolean);
+  // Read by base name, not by 'org_id[]': the qs parser behind
+  // express.urlencoded({ extended: true }) strips the brackets, so the
+  // bracketed key never exists and this used to reject every submission
+  // with "Pick an organization first" even with a box ticked.
+  const orgIds = pickArray(req.body, 'org_id');
 
   if (!orgIds.length) {
     req.setFlash({ type: 'error', message: 'Pick an organization first.' });

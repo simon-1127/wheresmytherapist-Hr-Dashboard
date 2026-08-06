@@ -6,6 +6,18 @@ function toArray(val) {
   return Array.isArray(val) ? val : [val];
 }
 
+// Reads a checkbox/multi-select group by its base name.
+//
+// express.urlencoded({ extended: true }) parses through qs, which CONSUMES
+// the trailing [] — `goals[]=a&goals[]=b` arrives as { goals: ['a','b'] },
+// so body['goals[]'] is always undefined and every one of these groups
+// silently saved as an empty array. Reading both shapes keeps this correct
+// whichever parser sits in front of it (extended: false would give the
+// bracketed key instead).
+function pickArray(body, name) {
+  return toArray(body[name] ?? body[`${name}[]`]).filter(Boolean);
+}
+
 // "Mumbai, Bangalore,  Pune" -> ["Mumbai", "Bangalore", "Pune"]
 function toCsvArray(val) {
   if (!val) return [];
@@ -21,4 +33,4 @@ function toIntOrNull(val) {
   return Number.isNaN(n) ? null : n;
 }
 
-module.exports = { toArray, toCsvArray, toIntOrNull };
+module.exports = { toArray, pickArray, toCsvArray, toIntOrNull };
