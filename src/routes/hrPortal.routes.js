@@ -67,6 +67,60 @@ async function sendEmployeeInvite(email) {
   }
 }
 
+/**
+ * Links an organization_employees row to an account that ALREADY exists.
+ *
+ * fn_link_org_employee_on_profile_create only fires on INSERT into
+ * client_profiles, so it catches people who sign up AFTER being invited.
+ * Anyone who already had an app account when HR added them keeps
+ * user_id NULL and status 'invited' forever — and fn_my_org_ids() ignores
+ * those rows. That single fact is why such an employee gets none of the
+ * org's benefits: no org subscription tier, and general doctors stay
+ * invisible to them (gendoc_profiles_select_org resolves through
+ * fn_my_org_ids).
+ *
+ * Returns true only when this call actually linked a row.
+ */
+async function linkExistingEmployeeAccount(orgId, email) {
+  const { data: user } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+  if (!user) return false;
+
+  // No profile yet means a brand-new account — leave it alone so the
+  // trigger does the linking (and the tier assignment) on first save.
+  const { data: profile } = await supabase
+    .from('client_profiles')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!profile) return false;
+
+  const { data: linked } = await supabase
+    .from('organization_employees')
+    .update({ user_id: user.id, status: 'active', joined_at: new Date().toISOString() })
+    .eq('org_id', orgId)
+    .eq('email', email)
+    .is('user_id', null)
+    .select('id');
+
+  if (!linked || !linked.length) return false;
+
+  // The trigger also copies the org's tier onto the profile; do the same
+  // here so a pre-existing account isn't left on 'free'.
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('subscription_tier_id')
+    .eq('id', orgId)
+    .maybeSingle();
+  if (org && org.subscription_tier_id) {
+    await supabase
+      .from('client_profiles')
+      .update({ subscription_tier: org.subscription_tier_id })
+      .eq('user_id', user.id);
+  }
+
+  return true;
+}
+
 router.get('/', async (req, res) => {
   const orgId = req.session.hrContact.orgId;
 
@@ -123,6 +177,7 @@ router.post('/employees', async (req, res) => {
     .filter(Boolean);
 
   let added = 0;
+  let linkedExisting = 0;
   const notEmailed = [];
   const notAdded = [];
 
@@ -142,11 +197,16 @@ router.post('/employees', async (req, res) => {
 
     const invite = await sendEmployeeInvite(email);
     if (!invite.ok) notEmailed.push(email);
+
+    // Someone who already uses the app won't trip the profile-create
+    // trigger, so link them here instead of leaving them 'invited'.
+    if (await linkExistingEmployeeAccount(orgId, email)) linkedExisting += 1;
   }
 
   // A row without a delivered invite is a person who will never hear about
   // this, so it must not be reported as a plain success.
   const parts = [`${added} of ${list.length} employee(s) added.`];
+  if (linkedExisting) parts.push(`${linkedExisting} already had an account and were activated immediately.`);
   if (notAdded.length) parts.push(`Already on the list (skipped): ${notAdded.join(', ')}.`);
   if (notEmailed.length) {
     parts.push(`Invite email could NOT be sent to: ${notEmailed.join(', ')} — use "Resend invite" once email is working.`);
@@ -177,12 +237,48 @@ router.post('/employees/:employeeId/resend-invite', async (req, res) => {
     return res.redirect('/hr/employees');
   }
 
+  const linked = await linkExistingEmployeeAccount(orgId, employee.email);
   const invite = await sendEmployeeInvite(employee.email);
+
   req.setFlash(
     invite.ok
-      ? { type: 'success', message: `Invite re-sent to ${employee.email}.` }
+      ? {
+          type: 'success',
+          message: linked
+            ? `${employee.email} already had an account — activated now. Invite re-sent as well.`
+            : `Invite re-sent to ${employee.email}.`,
+        }
       : { type: 'error', message: `Could not send to ${employee.email} — check the mailer logs.` },
   );
+  res.redirect('/hr/employees');
+});
+
+/**
+ * Backfill for everyone already stuck as 'invited' with an existing
+ * account. Without this, the only fix for those rows is to remove and
+ * re-add the person, which loses their invite history.
+ */
+router.post('/employees/sync', async (req, res) => {
+  const orgId = req.session.hrContact.orgId;
+
+  const { data: pending } = await supabase
+    .from('organization_employees')
+    .select('email')
+    .eq('org_id', orgId)
+    .eq('status', 'invited')
+    .is('user_id', null);
+
+  let linked = 0;
+  for (const row of pending || []) {
+    if (await linkExistingEmployeeAccount(orgId, row.email)) linked += 1;
+  }
+
+  req.setFlash({
+    type: linked ? 'success' : 'info',
+    message: linked
+      ? `${linked} employee(s) already had an account and are now active.`
+      : 'No pending invites matched an existing account. Anyone still invited has not signed up yet.',
+  });
   res.redirect('/hr/employees');
 });
 

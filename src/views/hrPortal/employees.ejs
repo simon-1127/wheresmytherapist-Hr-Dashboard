@@ -18,7 +18,17 @@
 </div>
 
 <div class="card">
-  <div class="card-header"><h2>All employees (<%= employees.length %>)</h2></div>
+  <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+    <h2>All employees (<%= employees.length %>)</h2>
+    <form method="POST" action="/hr/employees/sync">
+      <button class="btn btn-secondary btn-sm" type="submit">Activate existing accounts</button>
+    </form>
+  </div>
+  <p class="small muted">
+    Someone who already had a Where's My Therapist account before you added them stays
+    <em>invited</em> until it's linked — and until then they don't get your organization's plan or
+    its general doctor. Use the button above to link them.
+  </p>
   <% if (!employees.length) { %>
     <div class="empty-state">No employees added yet.</div>
   <% } else { %>
