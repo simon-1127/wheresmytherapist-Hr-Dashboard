@@ -1,0 +1,88 @@
+<div class="topbar">
+  <div>
+    <h1>Automations</h1>
+    <div class="subtitle">Notifications that send themselves, on your organization's behalf.</div>
+  </div>
+</div>
+
+<div class="card">
+  <p class="small muted" style="margin:0;">
+    These run every 15 minutes against your employees' own activity. Nobody is told what an
+    individual did — the app decides who matches, sends the message, and never reports back to
+    you who received it.
+  </p>
+</div>
+
+<% rules.forEach(rule => { %>
+  <div class="card">
+    <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+      <div>
+        <h2><%= rule.name %></h2>
+        <div class="small muted"><%= rule.description %></div>
+      </div>
+      <span class="badge <%= rule.isEnabled ? 'badge-success' : 'badge-neutral' %>">
+        <%= rule.isEnabled ? 'On' : 'Off' %>
+      </span>
+    </div>
+
+    <form method="POST" action="/hr/automations/<%= rule.key %>">
+      <div class="field">
+        <label>
+          <input type="checkbox" name="is_enabled" <%= rule.isEnabled ? 'checked' : '' %> />
+          Send this automatically
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="title_<%= rule.key %>">Title</label>
+        <input type="text" id="title_<%= rule.key %>" name="title" maxlength="80"
+               value="<%= rule.title %>" />
+      </div>
+
+      <div class="field">
+        <label for="body_<%= rule.key %>">Message</label>
+        <textarea id="body_<%= rule.key %>" name="body" rows="3" maxlength="500"><%= rule.body %></textarea>
+        <% if (rule.placeholders && rule.placeholders.length) { %>
+          <div class="field-hint">
+            You can use:
+            <% rule.placeholders.forEach(p => { %><code>{{<%= p %>}}</code> <% }) %>
+            — each is replaced with the real value when the message is sent.
+          </div>
+        <% } %>
+      </div>
+
+      <% (rule.configFields || []).forEach(field => { %>
+        <div class="field">
+          <label for="config_<%= field.key %>_<%= rule.key %>"><%= field.label %></label>
+          <input type="<%= field.type %>" id="config_<%= field.key %>_<%= rule.key %>"
+                 name="config_<%= field.key %>"
+                 value="<%= rule.configValues[field.key] !== undefined ? rule.configValues[field.key] : field.default %>" />
+        </div>
+      <% }) %>
+
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+    </form>
+  </div>
+<% }) %>
+
+<div class="card">
+  <div class="card-header"><h2>Recently sent automatically</h2></div>
+  <% if (!recent.length) { %>
+    <div class="empty-state">
+      Nothing yet. Turn an automation on above and it will start appearing here as it fires.
+    </div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Automation</th><th>When</th></tr></thead>
+      <tbody>
+        <% recent.forEach(r => { %>
+          <tr>
+            <td class="small"><%= r.rule_key %></td>
+            <td class="small muted"><%= new Date(r.created_at).toLocaleString() %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <p class="small muted">Recipients aren't listed — who got a wellness nudge is their business, not the portal's.</p>
+  <% } %>
+</div>

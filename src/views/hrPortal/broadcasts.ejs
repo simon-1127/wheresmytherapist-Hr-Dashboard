@@ -1,0 +1,83 @@
+<div class="topbar">
+  <div>
+    <h1>Broadcasts</h1>
+    <div class="subtitle">Send a message to your team. It appears in their app's notifications tab.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>New broadcast</h2></div>
+  <form method="POST" action="/hr/broadcasts">
+    <div class="field">
+      <label for="title">Title</label>
+      <input type="text" id="title" name="title" maxlength="80" required
+             placeholder="e.g. Mental health week starts Monday" />
+      <div class="field-hint">Keep it short — this is the bold line in the notification list.</div>
+    </div>
+
+    <div class="field">
+      <label for="body">Message</label>
+      <textarea id="body" name="body" rows="4" maxlength="500" required
+                placeholder="What do you want your team to know?"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="audience">Send to</label>
+      <select id="audience" name="audience" required>
+        <% audiences.forEach(a => { %>
+          <option value="<%= a.key %>">
+            <%= a.label %> — <%= audienceSizes[a.key] %> <%= audienceSizes[a.key] === 1 ? 'person' : 'people' %>
+          </option>
+        <% }) %>
+      </select>
+      <div class="field-hint">
+        Counts only include employees who have actually signed up. Anyone still showing as
+        <em>invited</em> has no account yet, so there is nowhere to deliver to.
+      </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Send broadcast</button>
+    <p class="small muted" style="margin-top:8px;">
+      This goes out immediately and can't be recalled once read — though you can delete it below,
+      which removes it from every inbox.
+    </p>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>Sent (<%= broadcasts.length %>)</h2></div>
+  <% if (!broadcasts.length) { %>
+    <div class="empty-state">Nothing sent yet.</div>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr><th>Message</th><th>Audience</th><th>Sent to</th><th>Read</th><th>When</th><th></th></tr>
+      </thead>
+      <tbody>
+        <% broadcasts.forEach(b => { %>
+          <tr>
+            <td>
+              <strong><%= b.title %></strong>
+              <div class="small muted"><%= b.body.length > 90 ? b.body.slice(0, 90) + '…' : b.body %></div>
+            </td>
+            <td class="small"><%= b.audience %></td>
+            <td><%= b.recipient_count %></td>
+            <td>
+              <%= readCounts[b.id] || 0 %>
+              <span class="small muted">
+                (<%= b.recipient_count ? Math.round(((readCounts[b.id] || 0) / b.recipient_count) * 100) : 0 %>%)
+              </span>
+            </td>
+            <td class="small muted"><%= new Date(b.created_at).toLocaleString() %></td>
+            <td>
+              <form method="POST" action="/hr/broadcasts/<%= b.id %>/delete"
+                    onsubmit="return confirm('Delete this broadcast and remove it from everyone\'s inbox?');">
+                <button class="btn btn-secondary btn-sm" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
