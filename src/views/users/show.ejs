@@ -3,12 +3,13 @@
     <h1><%= user.email || user.phone || 'User' %></h1>
     <div class="subtitle">
       <span class="badge badge-info"><%= user.role %></span>
+      <% if (staffRole) { %><span class="badge badge-neutral">staff: <%= staffRole.role_type.replace('_', ' ') %></span><% } %>
       <span class="badge <%= user.status === 'active' ? 'badge-success' : user.status === 'suspended' ? 'badge-warn' : 'badge-danger' %>"><%= user.status %></span>
-      <% if (orgLink) { %><span class="badge badge-neutral"><%= orgLink.organizations.company_name %> employee</span><% } %>
+      <% if (orgLink) { %><span class="badge badge-neutral"><%= orgLink.organizations ? orgLink.organizations.company_name : 'Org' %> employee (<%= orgLink.status %>)</span><% } %>
     </div>
   </div>
   <div class="pill-nav">
-    <% if (user.status !== 'suspended') { %>
+    <% if (user.status === 'active') { %>
       <form method="POST" action="/users/<%= user.id %>/status">
         <input type="hidden" name="status" value="suspended" />
         <button class="btn btn-secondary" type="submit">Suspend</button>
@@ -16,13 +17,15 @@
     <% } else { %>
       <form method="POST" action="/users/<%= user.id %>/status">
         <input type="hidden" name="status" value="active" />
-        <button class="btn btn-secondary" type="submit">Reactivate</button>
+        <button class="btn btn-secondary" type="submit"><%= user.status === 'deleted' ? 'Restore' : 'Reactivate' %></button>
       </form>
     <% } %>
-    <form method="POST" action="/users/<%= user.id %>/status" onsubmit="return confirm('Delete this user? Basic details are kept for logs, everything else is removed.');">
+    <% if (user.status !== 'deleted') { %>
+    <form method="POST" action="/users/<%= user.id %>/status" onsubmit="return confirm('Mark this account deleted? They can no longer use it. Their records are kept, and a provider listing is hidden.');">
       <input type="hidden" name="status" value="deleted" />
       <button class="btn btn-danger" type="submit">Delete</button>
     </form>
+    <% } %>
   </div>
 </div>
 
@@ -32,27 +35,32 @@
     <table>
       <tr><td class="muted">Email</td><td><%= user.email || '—' %></td></tr>
       <tr><td class="muted">Phone</td><td><%= user.phone || '—' %></td></tr>
-      <tr><td class="muted">Joined</td><td><%= new Date(user.created_at).toLocaleDateString() %></td></tr>
+      <tr><td class="muted">Joined</td><td><%= new Date(user.created_at).toLocaleDateString('en-IN') %></td></tr>
       <% if (profile && user.role === 'client') { %>
         <tr><td class="muted">Name</td><td><%= profile.full_name %></td></tr>
         <tr><td class="muted">Subscription tier</td><td>
           <form method="POST" action="/users/<%= user.id %>/tier" style="display:flex; gap:8px; align-items:center;">
             <select name="subscription_tier">
-              <option value="HR-Onboarding" <%= profile.subscription_tier === 'HR-Onboarding' ? 'selected' : '' %>>HR-Onboarding</option>
-              <option value="growth" <%= profile.subscription_tier === 'growth' ? 'selected' : '' %>>Growth</option>
-              <option value="starter" <%= profile.subscription_tier === 'starter' ? 'selected' : '' %>>Starter</option>
-              <option value="free" <%= profile.subscription_tier === 'free' ? 'selected' : '' %>>Free</option>
+              <% tiers.forEach(t => { %>
+                <option value="<%= t.id %>" <%= profile.subscription_tier === t.id ? 'selected' : '' %>><%= t.display_name || t.id %></option>
+              <% }) %>
             </select>
             <button class="btn btn-secondary btn-sm" type="submit">Update</button>
           </form>
         </td></tr>
+        <% if (orgLink && orgLink.status === 'active') { %>
+          <tr><td></td><td class="small muted">Tier is set by their organization. Changing it here is overwritten if HR re-adds them.</td></tr>
+        <% } %>
         <tr><td class="muted">Preferred language</td><td><%= profile.preferred_language || '—' %></td></tr>
       <% } %>
       <% if (profile && user.role === 'provider') { %>
         <tr><td class="muted">Name</td><td><%= profile.full_name %></td></tr>
         <tr><td class="muted">Title</td><td><%= profile.professional_title %></td></tr>
-        <tr><td class="muted">Application status</td><td><span class="badge badge-info"><%= profile.application_status %></span></td></tr>
+        <tr><td class="muted">Application status</td><td><span class="badge badge-info"><%= profile.application_status %></span> <a class="small" href="/providers/<%= user.id %>">Review →</a></td></tr>
         <tr><td class="muted">KYC status</td><td><span class="badge badge-info"><%= profile.kyc_status %></span></td></tr>
+      <% } %>
+      <% if (!profile && user.role === 'provider') { %>
+        <tr><td class="muted">Provider profile</td><td>Not created yet. <a class="small" href="/providers/<%= user.id %>">Open →</a></td></tr>
       <% } %>
     </table>
   </div>
@@ -70,7 +78,7 @@
               <td><span class="badge <%= c.severity >= 4 ? 'badge-danger' : c.severity >= 2 ? 'badge-warn' : 'badge-neutral' %>">Level <%= c.severity %></span></td>
               <td><span class="badge <%= c.status === 'resolved' ? 'badge-success' : 'badge-warn' %>"><%= c.status %></span></td>
               <td class="small muted"><%= c.trigger_type %></td>
-              <td class="small muted"><%= new Date(c.created_at).toLocaleDateString() %></td>
+              <td class="small muted"><%= new Date(c.created_at).toLocaleDateString('en-IN') %></td>
             </tr>
           <% }) %>
         </tbody>
@@ -90,9 +98,9 @@
         <tbody>
           <% payments.forEach(p => { %>
             <tr>
-              <td><%= p.sessions.currency %> <%= (p.amount / 100).toFixed(2) %></td>
+              <td><%= p.sessions ? p.sessions.currency : '' %> <%= (p.amount / 100).toFixed(2) %></td>
               <td><span class="badge badge-info"><%= p.status %></span></td>
-              <td class="small muted"><%= new Date(p.created_at).toLocaleDateString() %></td>
+              <td class="small muted"><%= new Date(p.created_at).toLocaleDateString('en-IN') %></td>
             </tr>
           <% }) %>
         </tbody>
@@ -110,7 +118,7 @@
         <tbody>
           <% sessionHistory.forEach(s => { %>
             <tr>
-              <td class="small muted"><%= new Date(s.scheduled_start).toLocaleString() %></td>
+              <td class="small muted"><%= new Date(s.scheduled_start).toLocaleString('en-IN') %></td>
               <td><span class="badge badge-info"><%= s.status %></span></td>
             </tr>
           <% }) %>

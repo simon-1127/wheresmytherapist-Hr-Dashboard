@@ -1,6 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { supabase } = require('../config/supabase');
+const { normalizeEmail, escapeLike } = require('../lib/validate');
+const { loginLimiter, clearLimit } = require('../lib/rateLimit');
 
 const router = express.Router();
 
@@ -19,8 +21,9 @@ const { createClient } = require('@supabase/supabase-js');
 // touching the app-wide default for everyone else.
 const REMEMBER_ME_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-router.post('/login', async (req, res) => {
-  const { email, password, rememberMe } = req.body;
+router.post('/login', loginLimiter('auth/login'), async (req, res) => {
+  const { password, rememberMe } = req.body;
+  const email = normalizeEmail(req.body.email);
   try {
     // Use a throwaway client just for sign-in — never the shared `supabase`
     // singleton. Calling signInWithPassword on that shared instance would
@@ -52,10 +55,15 @@ router.post('/login', async (req, res) => {
         layout: false,
       });
     }
-    req.session.superAdmin = { id: data.user.id, email: data.user.email };
-    if (rememberMe === 'on') {
-      req.sessionOptions.maxAge = REMEMBER_ME_MAX_AGE;
-    }
+    clearLimit(req);
+    req.session.superAdmin = { id: data.user.id, email: data.user.email, checkedAt: Date.now() };
+    // Persisted in the session (not just set once on this response) so that
+    // every later re-issue of the cookie — a flash message, a periodic role
+    // re-check — keeps the 30-day lifetime instead of silently falling back
+    // to the 12-hour default. That fallback was a second cause of "it keeps
+    // logging me out".
+    req.session.remember = rememberMe === 'on';
+    if (req.session.remember) req.sessionOptions.maxAge = REMEMBER_ME_MAX_AGE;
     res.redirect('/');
   } catch (err) {
     console.error('[auth] super admin login failed:', err);
@@ -75,16 +83,19 @@ router.get('/hr/login', (req, res) => {
   res.render('auth/hrLogin', { error: null, layout: false });
 });
 
-router.post('/hr/login', async (req, res) => {
-  const { email, password } = req.body;
+router.post('/hr/login', loginLimiter('auth/hrLogin'), async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const { password } = req.body;
   try {
+    // Case-insensitive: contacts created before emails were normalized may
+    // be stored with capitals, and people type their email however they like.
     const { data: contact, error } = await supabase
       .from('organization_hr_contacts')
       .select('id, org_id, email, password_hash, must_reset_password, status')
-      .eq('email', email)
+      .ilike('email', escapeLike(email))
       .maybeSingle();
 
-    if (error || !contact || contact.status !== 'active') {
+    if (error || !contact || contact.status !== 'active' || !password) {
       return res.render('auth/hrLogin', { error: 'Invalid email or password.', layout: false });
     }
 
@@ -93,11 +104,13 @@ router.post('/hr/login', async (req, res) => {
       return res.render('auth/hrLogin', { error: 'Invalid email or password.', layout: false });
     }
 
+    clearLimit(req);
     req.session.hrContact = {
       id: contact.id,
       orgId: contact.org_id,
       email: contact.email,
       mustResetPassword: contact.must_reset_password,
+      checkedAt: Date.now(),
     };
 
     await supabase
@@ -137,10 +150,16 @@ router.post('/hr/reset-password', async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  await supabase
+  const { error } = await supabase
     .from('organization_hr_contacts')
     .update({ password_hash: passwordHash, must_reset_password: false })
     .eq('id', req.session.hrContact.id);
+  if (error) {
+    return res.render('auth/hrResetPassword', {
+      error: 'Could not save your new password — please try again.',
+      layout: false,
+    });
+  }
 
   req.session.hrContact.mustResetPassword = false;
   res.redirect('/hr');
@@ -156,8 +175,9 @@ router.get('/support/login', (req, res) => {
   res.render('auth/supportLogin', { error: null, layout: false });
 });
 
-router.post('/support/login', async (req, res) => {
-  const { email, password, rememberMe } = req.body;
+router.post('/support/login', loginLimiter('auth/supportLogin'), async (req, res) => {
+  const { password, rememberMe } = req.body;
+  const email = normalizeEmail(req.body.email);
   try {
     const authClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -182,12 +202,12 @@ router.post('/support/login', async (req, res) => {
       });
     }
 
-    req.session.supportAgent = { id: data.user.id, email: data.user.email };
+    clearLimit(req);
+    req.session.supportAgent = { id: data.user.id, email: data.user.email, checkedAt: Date.now() };
     // Support agents live in this dashboard for a whole shift — same 30-day
     // opt-in as the super admin login, for the same reason.
-    if (rememberMe === 'on') {
-      req.sessionOptions.maxAge = REMEMBER_ME_MAX_AGE;
-    }
+    req.session.remember = rememberMe === 'on';
+    if (req.session.remember) req.sessionOptions.maxAge = REMEMBER_ME_MAX_AGE;
     res.redirect('/support');
   } catch (err) {
     console.error('[auth] support agent login failed:', err);

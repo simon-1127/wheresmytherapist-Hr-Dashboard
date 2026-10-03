@@ -2,9 +2,13 @@ const express = require('express');
 const { requireSupportAccess } = require('../middleware/auth');
 const q = require('../lib/supportQueries');
 const { sparklineSvg } = require('../lib/sparkline');
+const { uuidParams, safeRedirect } = require('../lib/validate');
 
 const router = express.Router();
 router.use(requireSupportAccess);
+// A truncated link from a crisis email used to hit Postgres as a malformed
+// uuid and 500. Now it's a 404 with a way back.
+uuidParams(router, ['id', 'userId', 'optionId'], '/support/alerts', 'Back to alerts');
 
 // Every render in this module uses the support layout, and every page needs
 // the agent identity + the unresolved-alert badge in the nav. Doing it once
@@ -87,13 +91,13 @@ router.post(
     const allowed = ['new', 'acknowledged', 'resolved', 'false_positive'];
     if (!allowed.includes(status)) {
       req.setFlash({ type: 'error', message: 'Unknown alert status.' });
-      return res.redirect(redirect || '/support/alerts');
+      return res.redirect(safeRedirect(redirect, '/support/alerts'));
     }
     // Resolving without a note leaves the next agent guessing what happened,
     // so it's required on the two terminal states.
     if ((status === 'resolved' || status === 'false_positive') && !(notes || '').trim()) {
       req.setFlash({ type: 'error', message: 'Add a resolution note before closing an alert.' });
-      return res.redirect(redirect || '/support/alerts');
+      return res.redirect(safeRedirect(redirect, '/support/alerts'));
     }
 
     const updated = await q.updateAlertStatus({
@@ -113,7 +117,7 @@ router.post(
     });
 
     req.setFlash({ type: 'success', message: `Alert marked ${status.replace('_', ' ')}.` });
-    res.redirect(redirect || '/support/alerts');
+    res.redirect(safeRedirect(redirect, '/support/alerts'));
   }),
 );
 
@@ -129,7 +133,7 @@ router.post(
       targetId: claimed.id,
       details: { user_id: claimed.user_id },
     });
-    res.redirect(req.body.redirect || '/support/alerts');
+    res.redirect(safeRedirect(req.body.redirect, '/support/alerts'));
   }),
 );
 
@@ -269,7 +273,7 @@ router.post(
       type: 'success',
       message: active ? 'Question is live again.' : 'Question retired — existing answers are kept.',
     });
-    res.redirect(req.body.redirect || '/support/questions');
+    res.redirect(safeRedirect(req.body.redirect, '/support/questions'));
   }),
 );
 
@@ -307,7 +311,7 @@ router.post(
     const optionText = (req.body.option_text || '').trim();
     if (!optionText) {
       req.setFlash({ type: 'error', message: 'Option text is required.' });
-      return res.redirect(req.body.redirect || '/support/questions');
+      return res.redirect(safeRedirect(req.body.redirect, '/support/questions'));
     }
     const updated = await q.updateOption(req.params.optionId, { optionText, emoji: (req.body.emoji || '').trim() });
     if (!updated) return res.status(404).render('errors/404', { layout: false, backHref: '/support/questions', backLabel: 'Back to questions' });
@@ -477,13 +481,12 @@ router.post(
     // Recomputed over the report's own period rather than reusing whatever
     // window the page happened to be showing, so the figures match the dates
     // on the report.
-    const periodDays = Math.max(
-      1,
-      Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1,
-    );
+    // (Previously this computed the period's LENGTH and then fetched that
+    // many days back from today, so a report for last month summarized the
+    // last ~30 days instead of last month.)
     const [periodHistory, periodTags] = await Promise.all([
-      q.getMoodHistory({ userId, days: periodDays }),
-      q.getJournalMoodTags({ userId, days: periodDays }),
+      q.getMoodHistory({ userId, from: start, to: end }),
+      q.getJournalMoodTags({ userId, from: start, to: end }),
     ]);
     const metrics = q.summarizeMetrics({
       series: q.buildMoodSeries(periodHistory),

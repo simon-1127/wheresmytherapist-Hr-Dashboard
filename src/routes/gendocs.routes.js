@@ -5,9 +5,11 @@ const { logAction } = require('../lib/audit');
 const { generateTempPassword } = require('../lib/passwords');
 const { sendMail } = require('../config/mailer');
 const { pickArray } = require('../lib/forms');
+const { uuidParams, normalizeEmail, isEmail, isUuid, escapeHtml } = require('../lib/validate');
 
 const router = express.Router();
 router.use(requireSuperAdmin);
+uuidParams(router, ['userId', 'orgId'], '/gendocs', 'Back to doctors');
 
 // General doctors exist ONLY through this dashboard. There is deliberately
 // no self-signup path: a GenDoc is contracted by WMT to serve specific
@@ -68,7 +70,12 @@ router.get('/', async (req, res) => {
 // ---------------------------------------------------------------------
 
 router.post('/', async (req, res) => {
-  const { email, full_name, professional_title, registration_no, registration_council } = req.body;
+  const { full_name, professional_title, registration_no, registration_council } = req.body;
+  const email = normalizeEmail(req.body.email);
+  if (!isEmail(email) || !(full_name || '').trim()) {
+    req.setFlash({ type: 'error', message: 'A valid email and a name are both required.' });
+    return res.redirect('/gendocs');
+  }
   const tempPassword = generateTempPassword();
 
   const { data, error } = await supabase.auth.admin.createUser({
@@ -86,10 +93,12 @@ router.post('/', async (req, res) => {
   // auth user. Without this flip the account routes into the client half
   // of the app and the doctor never sees a queue — same trap the provider
   // onboarding route documents.
+  // Upsert rather than update: if the auth trigger hasn't created the
+  // public.users row, an update silently matches nothing and the doctor is
+  // left without a role row at all.
   const { error: roleError } = await supabase
     .from('users')
-    .update({ role: 'gendoc' })
-    .eq('id', data.user.id);
+    .upsert({ id: data.user.id, email, role: 'gendoc' }, { onConflict: 'id' });
 
   if (roleError) {
     // Almost always means migrations/0008 hasn't been run, so 'gendoc' is
@@ -143,7 +152,7 @@ router.post('/', async (req, res) => {
     await sendMail({
       to: email,
       subject: "Doctor account created — Where's My Therapist",
-      html: `<p>Login email: <strong>${email}</strong><br/>Temporary password: <strong>${tempPassword}</strong></p>
+      html: `<p>Hi ${escapeHtml(full_name)},</p><p>Login email: <strong>${escapeHtml(email)}</strong><br/>Temporary password: <strong>${tempPassword}</strong></p>
         <p>You'll be asked to set your own password and complete your profile when you first log in.</p>`,
     });
   } catch (err) {
@@ -211,6 +220,10 @@ router.get('/:userId', async (req, res) => {
 router.post('/:userId/decision', async (req, res) => {
   const { userId } = req.params;
   const { decision, rejection_reason } = req.body;
+  if (!['approved', 'rejected'].includes(decision)) {
+    req.setFlash({ type: 'error', message: 'Unknown decision.' });
+    return res.redirect(`/gendocs/${userId}`);
+  }
 
   const update = {
     application_status: decision,
@@ -254,7 +267,7 @@ router.post('/:userId/assignments', async (req, res) => {
   // express.urlencoded({ extended: true }) strips the brackets, so the
   // bracketed key never exists and this used to reject every submission
   // with "Pick an organization first" even with a box ticked.
-  const orgIds = pickArray(req.body, 'org_id');
+  const orgIds = pickArray(req.body, 'org_id').filter(isUuid);
 
   if (!orgIds.length) {
     req.setFlash({ type: 'error', message: 'Pick an organization first.' });
@@ -327,7 +340,11 @@ router.post('/:userId/accepting', async (req, res) => {
   const { userId } = req.params;
   const accepting = req.body.accepting === 'true';
 
-  await supabase.from('gendoc_profiles').update({ is_accepting_queue: accepting }).eq('user_id', userId);
+  const { error } = await supabase.from('gendoc_profiles').update({ is_accepting_queue: accepting }).eq('user_id', userId);
+  if (error) {
+    req.setFlash({ type: 'error', message: 'Could not update — ' + error.message });
+    return res.redirect(`/gendocs/${userId}`);
+  }
 
   await logAction({
     adminId: req.session.superAdmin.id,

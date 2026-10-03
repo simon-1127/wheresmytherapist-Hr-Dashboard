@@ -343,3 +343,88 @@ tr:last-child td { border-bottom: none; }
 .small { font-size: 12px; }
 .mt-0 { margin-top: 0; }
 .mb-0 { margin-bottom: 0; }
+
+/* ---------- Added: providers review, team, system, dashboard ---------- */
+
+/* flash type 'info' was used by several routes but had no style */
+.flash-info { background: var(--info-bg); color: var(--blue); }
+
+.tab-count {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  text-align: center;
+}
+.tab.active .tab-count { background: var(--info-bg); color: var(--blue); }
+
+.decision-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.decision-actions { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+
+.inline-details { display: inline-block; position: relative; vertical-align: top; }
+.inline-details > summary { list-style: none; cursor: pointer; }
+.inline-details > summary::-webkit-details-marker { display: none; }
+.details-form {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+  white-space: normal;
+}
+.details-form textarea, .details-form input { width: 100%; }
+
+.provider-head { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.provider-photo {
+  width: 72px; height: 72px; border-radius: 50%; object-fit: cover;
+  border: 1px solid var(--border); display: block;
+}
+.provider-photo-empty {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-muted); color: var(--ink-faint); font-size: 11px;
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 2px 2px 2px 0;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  font-size: 12px;
+}
+
+.checklist { list-style: none; padding: 0; margin: 0; columns: 2; font-size: 13px; }
+.checklist li { padding: 3px 0; break-inside: avoid; }
+.checklist li.ok { color: var(--success); }
+.checklist li.miss { color: var(--danger); font-weight: 600; }
+
+.attention-list { list-style: none; padding: 0; margin: 0; }
+.attention-list li { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.attention-list li:last-child { border-bottom: none; }
+.attention-list li.urgent a { color: var(--danger); }
+
+.audit-details { max-width: 420px; word-break: break-word; font-family: ui-monospace, monospace; font-size: 11.5px; }
+
+@media (max-width: 720px) {
+  .checklist { columns: 1; }
+  .details-form { position: static; width: 100%; margin-top: 6px; }
+}

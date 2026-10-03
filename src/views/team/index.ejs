@@ -1,0 +1,80 @@
+<div class="topbar">
+  <div>
+    <h1>Team</h1>
+    <div class="subtitle">WMT staff with access to this dashboard. Providers aren't added here — they sign up on the website and are approved under <a href="/providers">Providers</a>.</div>
+  </div>
+</div>
+
+<div class="grid grid-2col">
+  <div class="card">
+    <div class="card-header"><h2>Add support agent</h2></div>
+    <form method="POST" action="/team/members">
+      <div class="field">
+        <label for="tm_email">Email</label>
+        <input type="email" id="tm_email" name="email" required />
+      </div>
+      <div class="field">
+        <label for="tm_name">Full name</label>
+        <input type="text" id="tm_name" name="full_name" required />
+      </div>
+      <div class="field">
+        <label for="tm_password">Password</label>
+        <input type="password" id="tm_password" name="password" minlength="8" autocomplete="new-password" />
+        <div class="small muted">At least 8 characters. Share it with them directly. If the email already has an app account you can leave this blank — they'll keep their current password.</div>
+      </div>
+      <input type="hidden" name="role_type" value="support_agent" />
+      <button class="btn btn-primary" type="submit">Add &amp; email them</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Super admins</h2></div>
+    <p class="small muted" style="margin-top:0;">Granted directly in the database — read-only here.</p>
+    <table>
+      <tbody>
+        <% admins.forEach(a => { %>
+          <tr>
+            <td><%= a.user ? a.user.email : a.user_id %><% if (a.user_id === meId) { %> <span class="badge badge-neutral">you</span><% } %></td>
+            <td class="small muted"><%= new Date(a.granted_at).toLocaleDateString('en-IN') %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Support team</h2></div>
+  <% if (!staff.length) { %>
+    <div class="empty-state small">No team members yet.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Added</th><th></th></tr></thead>
+      <tbody>
+        <% staff.forEach(a => { %>
+          <tr>
+            <td><%= a.full_name || '—' %></td>
+            <td><%= a.user ? a.user.email : a.user_id %></td>
+            <td>
+              <span class="badge badge-info"><%= a.role_type.replace('_', ' ') %></span>
+              <% if (a.role_type !== 'support_agent') { %><span class="badge badge-warn" title="This role has no portal to log in to yet.">no portal</span><% } %>
+            </td>
+            <td class="small muted"><%= new Date(a.granted_at).toLocaleDateString('en-IN') %></td>
+            <td style="text-align:right; white-space:nowrap;">
+              <details class="inline-details">
+                <summary class="btn btn-secondary btn-sm">Reset password</summary>
+                <form method="POST" action="/team/<%= a.user_id %>/password" class="details-form">
+                  <input type="password" name="password" minlength="8" required placeholder="New password (8+ chars)" autocomplete="new-password" />
+                  <button class="btn btn-secondary btn-sm" type="submit">Set</button>
+                </form>
+              </details>
+              <form method="POST" action="/team/<%= a.user_id %>/revoke" style="display:inline;" onsubmit="return confirm('Revoke dashboard access for this person? Their app account is not deleted.');">
+                <button class="btn btn-danger btn-sm" type="submit">Revoke</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>

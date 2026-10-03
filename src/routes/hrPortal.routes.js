@@ -2,6 +2,7 @@ const express = require('express');
 const { supabase } = require('../config/supabase');
 const { requireHrContact } = require('../middleware/auth');
 const { sendMail } = require('../config/mailer');
+const { uuidParams, normalizeEmail, isEmail } = require('../lib/validate');
 
 const router = express.Router();
 
@@ -10,6 +11,9 @@ const router = express.Router();
 // and every query is filtered by their own org_id — never trust anything
 // org-related from the request itself.
 router.use(requireHrContact);
+uuidParams(router, ['employeeId'], '/hr/employees', 'Back to employees');
+
+const MAX_BATCH = 500;
 
 /**
  * Generates a Supabase magic link and emails it. The link lands the
@@ -171,10 +175,29 @@ router.post('/employees', async (req, res) => {
   const orgId = req.session.hrContact.orgId;
   const { emails } = req.body;
 
-  const list = String(emails || '')
-    .split('\n')
-    .map((s) => s.trim())
+  // Accepts one-per-line, or comma/semicolon separated (pasted from a
+  // spreadsheet or an email "To:" line). Lowercased because the DB trigger
+  // that links an invite to the person's account compares emails exactly,
+  // and Supabase stores account emails lowercased — "Priya@Acme.com" never
+  // linked before this.
+  const tokens = String(emails || '')
+    .split(/[\n,;]+/)
+    .map((s) => normalizeEmail(s.replace(/^.*<([^>]+)>.*$/, '$1')))
     .filter(Boolean);
+  const invalid = tokens.filter((e) => !isEmail(e));
+  const list = [...new Set(tokens.filter((e) => isEmail(e)))];
+
+  if (!list.length) {
+    req.setFlash({
+      type: 'error',
+      message: invalid.length ? `No valid emails found. Check: ${invalid.slice(0, 10).join(', ')}` : 'Paste at least one email.',
+    });
+    return res.redirect('/hr/employees');
+  }
+  if (list.length > MAX_BATCH) {
+    req.setFlash({ type: 'error', message: `Please add at most ${MAX_BATCH} emails at a time (you pasted ${list.length}).` });
+    return res.redirect('/hr/employees');
+  }
 
   let added = 0;
   let linkedExisting = 0;
@@ -206,6 +229,7 @@ router.post('/employees', async (req, res) => {
   // A row without a delivered invite is a person who will never hear about
   // this, so it must not be reported as a plain success.
   const parts = [`${added} of ${list.length} employee(s) added.`];
+  if (invalid.length) parts.push(`Not valid emails (skipped): ${invalid.slice(0, 10).join(', ')}${invalid.length > 10 ? '…' : ''}.`);
   if (linkedExisting) parts.push(`${linkedExisting} already had an account and were activated immediately.`);
   if (notAdded.length) parts.push(`Already on the list (skipped): ${notAdded.join(', ')}.`);
   if (notEmailed.length) {
@@ -213,7 +237,7 @@ router.post('/employees', async (req, res) => {
   }
 
   req.setFlash({
-    type: notEmailed.length || notAdded.length ? 'error' : 'success',
+    type: notEmailed.length || notAdded.length || invalid.length ? 'error' : 'success',
     message: parts.join(' '),
   });
   res.redirect('/hr/employees');
@@ -286,12 +310,34 @@ router.post('/employees/:employeeId/remove', async (req, res) => {
   const orgId = req.session.hrContact.orgId;
   const { employeeId } = req.params;
 
-  await supabase
+  const { data: removed, error } = await supabase
     .from('organization_employees')
     .update({ status: 'inactive', deactivated_at: new Date().toISOString() })
     .eq('id', employeeId)
-    .eq('org_id', orgId);
+    .eq('org_id', orgId)
+    .select('email, user_id');
 
+  if (error || !removed || !removed.length) {
+    req.setFlash({ type: 'error', message: error ? 'Could not remove — ' + error.message : 'No such employee.' });
+    return res.redirect('/hr/employees');
+  }
+
+  // Removing someone used to leave them on the organization's paid tier
+  // indefinitely. Move them back to free — but only if the tier they're on
+  // is the org's, so a personally paid plan is left alone.
+  const userId = removed[0].user_id;
+  if (userId) {
+    const { data: org } = await supabase.from('organizations').select('subscription_tier_id').eq('id', orgId).maybeSingle();
+    if (org && org.subscription_tier_id) {
+      await supabase
+        .from('client_profiles')
+        .update({ subscription_tier: 'free' })
+        .eq('user_id', userId)
+        .eq('subscription_tier', org.subscription_tier_id);
+    }
+  }
+
+  req.setFlash({ type: 'success', message: `${removed[0].email} removed. Their account stays; company-sponsored access ends now.` });
   res.redirect('/hr/employees');
 });
 
@@ -325,6 +371,19 @@ router.get('/leave-requests', async (req, res) => {
 router.post('/leave-requests', async (req, res) => {
   const orgId = req.session.hrContact.orgId;
   const { employee_id, start_date, end_date, reason } = req.body;
+
+  // The employee must belong to this HR contact's own org — the id comes
+  // from the form, which is not to be trusted.
+  const { data: emp } = await supabase
+    .from('organization_employees')
+    .select('id')
+    .eq('id', employee_id || '00000000-0000-0000-0000-000000000000')
+    .eq('org_id', orgId)
+    .maybeSingle();
+  if (!emp || !start_date || !end_date || new Date(end_date) < new Date(start_date)) {
+    req.setFlash({ type: 'error', message: 'Pick one of your employees and a valid date range.' });
+    return res.redirect('/hr/leave-requests');
+  }
 
   await supabase.from('organization_leave_requests').insert({
     org_id: orgId,

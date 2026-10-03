@@ -35,6 +35,9 @@ const transporter = nodemailer.createTransport({
  * Returns {ok} rather than throwing so callers can report a failure without
  * every one of them needing its own guard.
  */
+// Last known SMTP state, shown on the System page.
+const status = { configured: Boolean(process.env.SMTP_HOST), verified: null, lastError: null, lastErrorAt: null, lastSentAt: null };
+
 async function sendMail({ to, subject, html }) {
   if (!process.env.SMTP_HOST) {
     // No SMTP configured (e.g. local dev) — log instead, so the rest of the
@@ -46,8 +49,11 @@ async function sendMail({ to, subject, html }) {
 
   try {
     const info = await transporter.sendMail({ from: process.env.MAIL_FROM, to, subject, html });
+    status.lastSentAt = new Date().toISOString();
     return { ok: true, info };
   } catch (err) {
+    status.lastError = err.message;
+    status.lastErrorAt = new Date().toISOString();
     console.error(`[mailer] failed to send "${subject}" to ${to}: ${err.message}`);
     if (err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED') {
       console.error(
@@ -85,8 +91,14 @@ function verifyMailer() {
   }
   transporter
     .verify()
-    .then(() => console.log(`[mailer] SMTP ready (${process.env.SMTP_HOST}:${port})`))
+    .then(() => {
+      status.verified = true;
+      console.log(`[mailer] SMTP ready (${process.env.SMTP_HOST}:${port})`);
+    })
     .catch((err) => {
+      status.verified = false;
+      status.lastError = err.message;
+      status.lastErrorAt = new Date().toISOString();
       console.error(`[mailer] SMTP check failed (${process.env.SMTP_HOST}:${port}): ${err.message}`);
       if (err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED') {
         console.error('[mailer] try SMTP_PORT=2465 or 2587 — Railway blocks the standard SMTP ports.');
@@ -94,4 +106,8 @@ function verifyMailer() {
     });
 }
 
-module.exports = { sendMail, verifyMailer };
+function mailerStatus() {
+  return { ...status, host: process.env.SMTP_HOST || null, port, from: process.env.MAIL_FROM || null };
+}
+
+module.exports = { sendMail, verifyMailer, mailerStatus };

@@ -1,7 +1,7 @@
 <div class="topbar">
   <div>
     <h1>Users</h1>
-    <div class="subtitle">Individual clients, org employees, providers, and admins — kept separate.</div>
+    <div class="subtitle">Individual clients, org employees, providers, and WMT staff — kept separate.</div>
   </div>
 </div>
 
@@ -9,7 +9,7 @@
   <a class="tab <%= segment === 'clients' ? 'active' : '' %>" href="/users?segment=clients">Individual Clients</a>
   <a class="tab <%= segment === 'org_employees' ? 'active' : '' %>" href="/users?segment=org_employees">Org Employees</a>
   <a class="tab <%= segment === 'providers' ? 'active' : '' %>" href="/users?segment=providers">Providers</a>
-  <a class="tab <%= segment === 'admins' ? 'active' : '' %>" href="/users?segment=admins">Admins</a>
+  <a class="tab <%= segment === 'staff' ? 'active' : '' %>" href="/users?segment=staff">Staff</a>
 </div>
 
 <div class="card">
@@ -27,25 +27,26 @@
       <tbody>
         <% rows.forEach(r => { %>
           <tr>
-            <td><%= r.email %></td>
-            <td><%= r.organizations ? r.organizations.company_name : '—' %></td>
+            <td><% if (r.user_id) { %><a href="/users/<%= r.user_id %>"><%= r.email %></a><% } else { %><%= r.email %><% } %></td>
+            <td><a href="/organizations/<%= r.org_id %>"><%= r.organizations ? r.organizations.company_name : '—' %></a></td>
             <td><span class="badge <%= r.status === 'active' ? 'badge-success' : r.status === 'invited' ? 'badge-warn' : 'badge-neutral' %>"><%= r.status %></span></td>
-            <td class="small muted"><%= new Date(r.invited_at).toLocaleDateString() %></td>
+            <td class="small muted"><%= new Date(r.invited_at).toLocaleDateString('en-IN') %></td>
           </tr>
         <% }) %>
       </tbody>
     </table>
   <% } else { %>
     <table>
-      <thead><tr><th>Email</th><th>Phone</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+      <thead><tr><th>Email</th><th>Phone</th><% if (segment === 'staff') { %><th>Staff role</th><% } %><th>Status</th><th>Joined</th><th></th></tr></thead>
       <tbody>
         <% rows.forEach(r => { %>
-          <tr class="table-link-row" onclick="location.href='/users/<%= r.id %>'">
+          <tr class="table-link-row" onclick="location.href='<%= segment === 'providers' ? '/providers/' : '/users/' %><%= r.id %>'">
             <td><%= r.email || '—' %></td>
             <td><%= r.phone || '—' %></td>
+            <% if (segment === 'staff') { %><td><span class="badge badge-info"><%= r.staffRole ? r.staffRole.role_type.replace('_', ' ') : '' %></span></td><% } %>
             <td><span class="badge <%= r.status === 'active' ? 'badge-success' : r.status === 'suspended' ? 'badge-warn' : 'badge-danger' %>"><%= r.status %></span></td>
-            <td class="small muted"><%= new Date(r.created_at).toLocaleDateString() %></td>
-            <td><a class="small" href="/users/<%= r.id %>">View →</a></td>
+            <td class="small muted"><%= new Date(r.created_at).toLocaleDateString('en-IN') %></td>
+            <td><a class="small" href="<%= segment === 'providers' ? '/providers/' : '/users/' %><%= r.id %>">View →</a></td>
           </tr>
         <% }) %>
       </tbody>

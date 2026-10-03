@@ -237,7 +237,9 @@ async function searchClients({ search, limit = 50 }) {
  * assumes a 1-10 scale — values are normalized to a percentage before they
  * reach the chart.
  */
-async function getMoodHistory({ userId, days = 60 }) {
+async function getMoodHistory({ userId, days = 60, from = null, to = null }) {
+  // Either a rolling window (`days` back from today) or an explicit
+  // from/to date range (wellness reports cover a fixed period).
   const { rows } = await query(
     `SELECT r.id AS response_id, to_char(r.response_date, 'YYYY-MM-DD') AS response_date,
             r.completed_at,
@@ -249,9 +251,10 @@ async function getMoodHistory({ userId, days = 60 }) {
        LEFT JOIN survey_answers a ON a.response_id = r.id
        LEFT JOIN survey_questions q ON q.id = a.question_id
       WHERE r.user_id = $1
-        AND r.response_date >= CURRENT_DATE - ($2::int || ' days')::interval
+        AND r.response_date >= COALESCE($3::date, CURRENT_DATE - ($2::int || ' days')::interval)
+        AND ($4::date IS NULL OR r.response_date <= $4::date)
       ORDER BY r.response_date DESC, q.order_index ASC`,
-    [userId, days],
+    [userId, days, from, to],
   );
 
   // Resolve option ids -> text in one round trip rather than per answer.
@@ -341,7 +344,7 @@ function buildMoodSeries(history) {
   });
 }
 
-async function getJournalMoodTags({ userId, days = 60 }) {
+async function getJournalMoodTags({ userId, days = 60, from = null, to = null }) {
   // Tags only — never entry content. Journal text is private to the client
   // and their provider; the only exception is a single entry that itself
   // triggered a crisis alert, handled in getFlaggedContent above.
@@ -349,10 +352,11 @@ async function getJournalMoodTags({ userId, days = 60 }) {
     `SELECT mood_tag, COUNT(*)::int AS n, MAX(created_at) AS last_at
        FROM journal_entries
       WHERE user_id = $1 AND deleted_at IS NULL AND mood_tag IS NOT NULL
-        AND created_at >= now() - ($2::int || ' days')::interval
+        AND created_at >= COALESCE($3::date::timestamptz, now() - ($2::int || ' days')::interval)
+        AND ($4::date IS NULL OR created_at < ($4::date + 1)::timestamptz)
       GROUP BY mood_tag
       ORDER BY n DESC`,
-    [userId, days],
+    [userId, days, from, to],
   );
   return rows;
 }

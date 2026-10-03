@@ -6,9 +6,27 @@ const { logAction } = require('../lib/audit');
 const { generateTempPassword } = require('../lib/passwords');
 const { pickArray, toCsvArray, toIntOrNull } = require('../lib/forms');
 const { sendMail } = require('../config/mailer');
+const { uuidParams, normalizeEmail, isEmail, escapeHtml, dashboardUrl } = require('../lib/validate');
 
 const router = express.Router();
 router.use(requireSuperAdmin);
+uuidParams(router, ['id', 'contactId'], '/organizations', 'Back to organizations');
+
+const ORG_STATUSES = ['active', 'inactive', 'churned'];
+
+/**
+ * Moves employees who were on this org's tier back to free. Only touches
+ * people whose current tier IS the org's tier, so someone who separately
+ * paid for a plan isn't downgraded by their employer leaving.
+ */
+async function revertOrgTier(orgId, userIds) {
+  if (!userIds.length) return;
+  const { data: org } = await supabase.from('organizations').select('subscription_tier_id').eq('id', orgId).maybeSingle();
+  let q = supabase.from('client_profiles').update({ subscription_tier: 'free' }).in('user_id', userIds);
+  if (org && org.subscription_tier_id) q = q.eq('subscription_tier', org.subscription_tier_id);
+  const { error } = await q;
+  if (error) console.error('[organizations] tier revert failed:', error.message);
+}
 
 // ---------- List ----------
 
@@ -48,7 +66,7 @@ router.post('/', async (req, res) => {
 
     spoc_name: b.spoc_name || null,
     spoc_designation: b.spoc_designation || null,
-    spoc_email: b.spoc_email || null,
+    spoc_email: normalizeEmail(b.spoc_email) || null,
     spoc_phone: b.spoc_phone || null,
 
     goals: pickArray(b, 'goals'),
@@ -120,8 +138,12 @@ router.post('/', async (req, res) => {
   });
 
   let tempPasswordToShow = null;
+  let hrProblem = null;
+  const spocEmail = normalizeEmail(b.spoc_email);
 
-  if (b.create_hr_access === 'on' && b.spoc_email) {
+  if (b.create_hr_access === 'on' && spocEmail && !isEmail(spocEmail)) {
+    hrProblem = `HR portal access was NOT created — "${spocEmail}" isn't a valid email. Add the contact from the HR tab.`;
+  } else if (b.create_hr_access === 'on' && spocEmail) {
     const tempPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 10);
 
@@ -129,7 +151,7 @@ router.post('/', async (req, res) => {
       org_id: org.id,
       name: b.spoc_name || null,
       designation: b.spoc_designation || null,
-      email: b.spoc_email,
+      email: spocEmail,
       phone: b.spoc_phone || null,
       password_hash: passwordHash,
       must_reset_password: true,
@@ -138,28 +160,38 @@ router.post('/', async (req, res) => {
 
     if (!hrErr) {
       tempPasswordToShow = tempPassword;
+      // The login link used to be built from EMPLOYEE_REDIRECT_URL — the
+      // app's deep link (wheresmytherapist://…) — so it pointed nowhere.
       await sendMail({
-        to: b.spoc_email,
+        to: spocEmail,
         subject: "Your Where's My Therapist HR portal access",
-        html: `<p>Hi ${b.spoc_name || ''},</p>
-          <p>An HR portal account has been created for ${b.company_name} at Where's My Therapist.</p>
-          <p>Login email: <strong>${b.spoc_email}</strong><br/>
+        html: `<p>Hi ${escapeHtml(b.spoc_name || '')},</p>
+          <p>An HR portal account has been created for ${escapeHtml(b.company_name)} at Where's My Therapist.</p>
+          <p>Login email: <strong>${escapeHtml(spocEmail)}</strong><br/>
           Temporary password: <strong>${tempPassword}</strong></p>
           <p>You'll be asked to set your own password on first login.</p>
-          <p><a href="${process.env.EMPLOYEE_REDIRECT_URL ? process.env.EMPLOYEE_REDIRECT_URL.replace('/auth/callback', '') : ''}/hr/login">Log in to the HR portal</a></p>`,
+          <p><a href="${dashboardUrl()}/hr/login">Log in to the HR portal</a></p>`,
       });
     } else {
       console.error('[organizations] HR contact create failed:', hrErr);
+      hrProblem =
+        hrErr.code === '23505'
+          ? `HR portal access was NOT created — ${spocEmail} is already an HR contact (emails are unique across all organizations).`
+          : `HR portal access was NOT created — ${hrErr.message}`;
     }
   }
 
+  // Previously a failed HR-contact insert still reported plain success, and
+  // the SPOC simply never got access.
   req.setFlash(
-    tempPasswordToShow
-      ? {
-          type: 'success',
-          message: `Organization created. HR contact temp password (shown once): ${tempPasswordToShow}`,
-        }
-      : { type: 'success', message: 'Organization created.' },
+    hrProblem
+      ? { type: 'error', message: `Organization created. ${hrProblem}` }
+      : tempPasswordToShow
+        ? {
+            type: 'success',
+            message: `Organization created. HR contact temp password (shown once): ${tempPasswordToShow}`,
+          }
+        : { type: 'success', message: 'Organization created.' },
   );
 
   res.redirect(`/organizations/${org.id}`);
@@ -170,8 +202,8 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
 
-  const { data: org } = await supabase.from('organizations').select('*').eq('id', id).single();
-  if (!org) return res.status(404).render('errors/404', { layout: false });
+  const { data: org } = await supabase.from('organizations').select('*').eq('id', id).maybeSingle();
+  if (!org) return res.status(404).render('errors/404', { layout: false, backHref: '/organizations', backLabel: 'Back to organizations' });
 
   const { data: hrContacts } = await supabase
     .from('organization_hr_contacts')
@@ -205,7 +237,15 @@ router.post('/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  await supabase.from('organizations').update({ status }).eq('id', id);
+  if (!ORG_STATUSES.includes(status)) {
+    req.setFlash({ type: 'error', message: 'Unknown status.' });
+    return res.redirect(`/organizations/${id}`);
+  }
+  const { error: statusErr } = await supabase.from('organizations').update({ status }).eq('id', id);
+  if (statusErr) {
+    req.setFlash({ type: 'error', message: 'Could not update status — ' + statusErr.message });
+    return res.redirect(`/organizations/${id}`);
+  }
 
   await logAction({
     adminId: req.session.superAdmin.id,
@@ -233,9 +273,10 @@ router.post('/:id/status', async (req, res) => {
         .update({ status: 'inactive', deactivated_at: new Date().toISOString() })
         .in('id', employeeIds);
     }
-    if (userIds.length) {
-      await supabase.from('client_profiles').update({ subscription_tier: 'free' }).in('user_id', userIds);
-    }
+    await revertOrgTier(id, userIds);
+
+    // HR contacts of an org that has ended shouldn't keep portal access.
+    await supabase.from('organization_hr_contacts').update({ status: 'disabled' }).eq('org_id', id);
 
     await logAction({
       adminId: req.session.superAdmin.id,
@@ -244,6 +285,12 @@ router.post('/:id/status', async (req, res) => {
       targetId: id,
       details: { count: employeeIds.length },
     });
+    req.setFlash({
+      type: 'success',
+      message: `Organization ${status}. ${employeeIds.length} employee(s) deactivated and moved back to the free tier; HR portal logins disabled.`,
+    });
+  } else {
+    req.setFlash({ type: 'success', message: `Organization ${status}. HR contacts can be re-enabled from the HR tab if needed.` });
   }
 
   res.redirect(`/organizations/${id}`);
@@ -268,7 +315,7 @@ router.post('/:id/employees/delete-all', async (req, res) => {
       .from('users')
       .update({ status: 'deleted', deleted_at: new Date().toISOString() })
       .in('id', userIds);
-    await supabase.from('client_profiles').update({ subscription_tier: 'free' }).in('user_id', userIds);
+    await revertOrgTier(id, userIds);
   }
 
   await supabase
@@ -292,7 +339,12 @@ router.post('/:id/employees/delete-all', async (req, res) => {
 
 router.post('/:id/hr-contacts', async (req, res) => {
   const { id } = req.params;
-  const { name, designation, email, phone } = req.body;
+  const { name, designation, phone } = req.body;
+  const email = normalizeEmail(req.body.email);
+  if (!isEmail(email)) {
+    req.setFlash({ type: 'error', message: 'Enter a valid email for the HR contact.' });
+    return res.redirect(`/organizations/${id}?tab=hr`);
+  }
 
   const tempPassword = generateTempPassword();
   const passwordHash = await bcrypt.hash(tempPassword, 10);
@@ -309,15 +361,23 @@ router.post('/:id/hr-contacts', async (req, res) => {
   });
 
   if (error) {
-    req.setFlash({ type: 'error', message: 'Could not add HR contact — ' + error.message });
-    return res.redirect(`/organizations/${id}`);
+    req.setFlash({
+      type: 'error',
+      message:
+        error.code === '23505'
+          ? `${email} is already an HR contact (possibly for another organization). Use "Reissue password" on the existing contact instead.`
+          : 'Could not add HR contact — ' + error.message,
+    });
+    return res.redirect(`/organizations/${id}?tab=hr`);
   }
 
   await sendMail({
     to: email,
     subject: "Your Where's My Therapist HR portal access",
-    html: `<p>Login email: <strong>${email}</strong><br/>Temporary password: <strong>${tempPassword}</strong></p>
-      <p>You'll be asked to set your own password on first login.</p>`,
+    html: `<p>Hi ${escapeHtml(name || '')},</p>
+      <p>Login email: <strong>${escapeHtml(email)}</strong><br/>Temporary password: <strong>${tempPassword}</strong></p>
+      <p>You'll be asked to set your own password on first login.</p>
+      <p><a href="${dashboardUrl()}/hr/login">Log in to the HR portal</a></p>`,
   });
 
   await logAction({
@@ -332,19 +392,28 @@ router.post('/:id/hr-contacts', async (req, res) => {
     type: 'success',
     message: `HR contact added. Temp password (shown once): ${tempPassword}`,
   });
-  res.redirect(`/organizations/${id}`);
+  res.redirect(`/organizations/${id}?tab=hr`);
 });
 
 router.post('/:id/hr-contacts/:contactId/disable', async (req, res) => {
   const { id, contactId } = req.params;
-  await supabase.from('organization_hr_contacts').update({ status: 'disabled' }).eq('id', contactId);
+  const { error } = await supabase
+    .from('organization_hr_contacts')
+    .update({ status: 'disabled' })
+    .eq('id', contactId)
+    .eq('org_id', id);
+  if (error) {
+    req.setFlash({ type: 'error', message: 'Could not disable — ' + error.message });
+    return res.redirect(`/organizations/${id}?tab=hr`);
+  }
   await logAction({
     adminId: req.session.superAdmin.id,
     action: 'hr_contact.disabled',
     targetTable: 'organization_hr_contacts',
     targetId: contactId,
   });
-  res.redirect(`/organizations/${id}`);
+  req.setFlash({ type: 'success', message: 'HR contact disabled. Any open session ends within 5 minutes.' });
+  res.redirect(`/organizations/${id}?tab=hr`);
 });
 
 // A temp password is shown exactly once, at creation. If it is lost —
@@ -383,11 +452,12 @@ router.post('/:id/hr-contacts/:contactId/reissue-password', async (req, res) => 
     await sendMail({
       to: contact.email,
       subject: "Your Where's My Therapist HR portal password was reset",
-      html: `<p>Hi ${contact.name || ''},</p>
+      html: `<p>Hi ${escapeHtml(contact.name || '')},</p>
         <p>A new temporary password has been issued for your HR portal account.</p>
-        <p>Login email: <strong>${contact.email}</strong><br/>
+        <p>Login email: <strong>${escapeHtml(contact.email)}</strong><br/>
         Temporary password: <strong>${tempPassword}</strong></p>
-        <p>You'll be asked to set your own password on first login. Any previous password no longer works.</p>`,
+        <p>You'll be asked to set your own password on first login. Any previous password no longer works.</p>
+        <p><a href="${dashboardUrl()}/hr/login">Log in to the HR portal</a></p>`,
     });
   } catch (err) {
     // The password has already changed at this point, so a mail failure

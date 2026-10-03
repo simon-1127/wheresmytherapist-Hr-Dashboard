@@ -2,6 +2,7 @@ const express = require('express');
 const { supabase } = require('../config/supabase');
 const { requireSuperAdmin } = require('../middleware/auth');
 const { logAction } = require('../lib/audit');
+const { isUuid } = require('../lib/validate');
 
 const router = express.Router();
 router.use(requireSuperAdmin);
@@ -15,6 +16,26 @@ router.use(requireSuperAdmin);
  * with status 'invited' has no user_id, so including it would inflate the
  * recipient count with sends that go nowhere.
  */
+/**
+ * Keeps only ids whose account is an active client. Without this, "Everyone"
+ * also reached deleted and suspended accounts, providers who once had a
+ * client profile, and WMT staff — anyone with a client_profiles row.
+ */
+async function onlyActiveClients(ids) {
+  const keep = new Set();
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .in('id', ids.slice(i, i + 300))
+      .eq('role', 'client')
+      .eq('status', 'active');
+    if (error) throw new Error(`Could not resolve audience — ${error.message}`);
+    (data || []).forEach((u) => keep.add(u.id));
+  }
+  return ids.filter((id) => keep.has(id));
+}
+
 async function orgMemberIds(orgId) {
   const { data } = await supabase
     .from('organization_employees')
@@ -22,14 +43,18 @@ async function orgMemberIds(orgId) {
     .eq('org_id', orgId)
     .eq('status', 'active')
     .not('user_id', 'is', null);
-  return (data || []).map((r) => r.user_id);
+  return onlyActiveClients((data || []).map((r) => r.user_id));
 }
 
 async function allClientIds() {
   // client_profiles rather than users: a row here means they finished
   // onboarding, which is the point at which the app is usable to them.
-  const { data } = await supabase.from('client_profiles').select('user_id');
-  return (data || []).map((r) => r.user_id);
+  const [{ data }, { data: staff }] = await Promise.all([
+    supabase.from('client_profiles').select('user_id'),
+    supabase.from('admin_roles').select('user_id'),
+  ]);
+  const staffIds = new Set((staff || []).map((r) => r.user_id));
+  return onlyActiveClients((data || []).map((r) => r.user_id).filter((id) => !staffIds.has(id)));
 }
 
 const AUDIENCES = {
@@ -168,7 +193,7 @@ router.get('/broadcasts', async (req, res, next) => {
   try {
     // Scope comes from the query string so the audience counts below can be
     // recalculated when an operator picks a different organisation.
-    const orgId = req.query.org_id || null;
+    const orgId = isUuid(req.query.org_id) ? req.query.org_id : null;
 
     const { data: organizations } = await supabase
       .from('organizations')
@@ -216,7 +241,7 @@ router.get('/broadcasts', async (req, res, next) => {
 router.post('/broadcasts', async (req, res, next) => {
   try {
     // Empty string from the "All clients" option means platform-wide.
-    const orgId = req.body.org_id ? req.body.org_id : null;
+    const orgId = isUuid(req.body.org_id) ? req.body.org_id : null;
     const title = (req.body.title || '').trim();
     const body = (req.body.body || '').trim();
     const audienceKey = req.body.audience || 'all';
@@ -322,6 +347,10 @@ router.post('/broadcasts', async (req, res, next) => {
  */
 router.post('/broadcasts/:id/delete', async (req, res, next) => {
   try {
+    if (!isUuid(req.params.id)) {
+      req.setFlash({ type: 'error', message: 'That broadcast no longer exists.' });
+      return res.redirect('/notifications/broadcasts');
+    }
     const { data: broadcast } = await supabase
       .from('broadcasts')
       .select('id, title')
@@ -360,7 +389,7 @@ router.get('/automations', async (req, res, next) => {
     // No org_id means the platform-wide rule set — the normal case. Picking
     // an organisation edits an override that applies to that company's
     // employees only.
-    const orgId = req.query.org_id || null;
+    const orgId = isUuid(req.query.org_id) ? req.query.org_id : null;
 
     const { data: organizations } = await supabase
       .from('organizations')
@@ -404,7 +433,7 @@ router.get('/automations', async (req, res, next) => {
 
 router.post('/automations/:key', async (req, res, next) => {
   try {
-    const orgId = req.body.org_id ? req.body.org_id : null;
+    const orgId = isUuid(req.body.org_id) ? req.body.org_id : null;
     const backTo = orgId ? `/notifications/automations?org_id=${orgId}` : '/notifications/automations';
 
     const rule = RULES.find((r) => r.key === req.params.key);
@@ -433,8 +462,9 @@ router.post('/automations/:key', async (req, res, next) => {
     // indexes (org_id,rule_key where org_id is not null; rule_key where it
     // is null) — onConflict on 'org_id,rule_key' can't match a NULL org.
     let error;
+    let savedRow = null;
     if (orgId) {
-      ({ error } = await supabase.from('notification_rules').upsert(
+      ({ data: savedRow, error } = await supabase.from('notification_rules').upsert(
         {
           org_id: orgId,
           rule_key: rule.key,
@@ -445,7 +475,7 @@ router.post('/automations/:key', async (req, res, next) => {
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'org_id,rule_key' },
-      ));
+      ).select('id').maybeSingle());
     } else {
       const { data: existing } = await supabase
         .from('notification_rules')
@@ -464,9 +494,9 @@ router.post('/automations/:key', async (req, res, next) => {
         updated_at: new Date().toISOString(),
       };
 
-      ({ error } = existing
-        ? await supabase.from('notification_rules').update(payload).eq('id', existing.id)
-        : await supabase.from('notification_rules').insert(payload));
+      ({ data: savedRow, error } = existing
+        ? await supabase.from('notification_rules').update(payload).eq('id', existing.id).select('id').maybeSingle()
+        : await supabase.from('notification_rules').insert(payload).select('id').maybeSingle());
     }
 
     if (error) {
@@ -476,7 +506,9 @@ router.post('/automations/:key', async (req, res, next) => {
         adminId: req.session.superAdmin.id,
         action: isEnabled ? 'automation.enabled' : 'automation.disabled',
         targetTable: 'notification_rules',
-        targetId: null,
+        // admin_audit_log.target_id is NOT NULL; passing null made every
+        // automation change silently fail to be audited.
+        targetId: (savedRow && savedRow.id) || orgId || req.session.superAdmin.id,
         details: { rule_key: rule.key, org_id: orgId },
       });
       req.setFlash({

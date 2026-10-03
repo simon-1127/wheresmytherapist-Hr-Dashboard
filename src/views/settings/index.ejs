@@ -1,46 +1,61 @@
 <div class="topbar">
   <div>
-    <h1>Settings</h1>
-    <div class="subtitle">Super admin access is appointed directly in the database — this is a read-only view.</div>
+    <h1>System &amp; audit log</h1>
+    <div class="subtitle">Health of everything this dashboard depends on, and a record of every admin action. Team access is managed under <a href="/team">Team</a>.</div>
   </div>
 </div>
 
 <div class="card">
-  <div class="card-header"><h2>Super admins</h2></div>
-  <% if (!admins.length) { %>
-    <div class="empty-state">No super admins found.</div>
-  <% } else { %>
-    <table>
-      <thead><tr><th>Email</th><th>Granted</th></tr></thead>
-      <tbody>
-        <% admins.forEach(a => { %>
-          <tr>
-            <td><%= a.user ? a.user.email : a.user_id %></td>
-            <td class="small muted"><%= new Date(a.granted_at).toLocaleDateString() %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  <% } %>
+  <div class="card-header"><h2>Health</h2><a class="small" href="/settings">Re-check</a></div>
+  <table>
+    <tbody>
+      <% health.forEach(h => { %>
+        <tr>
+          <td style="width:30px;"><span class="badge <%= h.ok ? 'badge-success' : 'badge-danger' %>"><%= h.ok ? 'OK' : '!' %></span></td>
+          <td style="width:240px;"><strong><%= h.name %></strong></td>
+          <td class="small <%= h.ok ? 'muted' : '' %>"><%= h.detail %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <p class="small muted" style="margin-bottom:0;">For alerts when the dashboard goes down, point a free uptime monitor at <code>/health?deep=1</code> — it returns 503 if either database is unreachable.</p>
 </div>
 
 <div class="card" style="margin-top:16px;">
-  <div class="card-header"><h2>Team members</h2></div>
-  <% if (!teamMembers.length) { %>
-    <div class="empty-state small">No team members yet.</div>
+  <div class="card-header"><h2>Audit log</h2></div>
+  <form method="GET" action="/settings" style="margin-bottom:12px; display:flex; gap:8px;">
+    <input type="text" name="action" value="<%= action %>" placeholder="Filter by action, e.g. provider, broadcast, hr_contact" style="max-width:360px;" />
+    <button class="btn btn-secondary btn-sm" type="submit">Filter</button>
+    <% if (action) { %><a class="btn btn-secondary btn-sm" href="/settings">Clear</a><% } %>
+  </form>
+  <% if (!log.length) { %>
+    <div class="empty-state small">Nothing logged<%= action ? ' for that filter' : '' %>.</div>
   <% } else { %>
     <table>
-      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Granted</th></tr></thead>
+      <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead>
       <tbody>
-        <% teamMembers.forEach(a => { %>
+        <% log.forEach(l => { %>
           <tr>
-            <td><%= a.full_name || '—' %></td>
-            <td><%= a.user ? a.user.email : a.user_id %></td>
-            <td><span class="badge badge-info"><%= a.role_type.replace('_', ' ') %></span></td>
-            <td class="small muted"><%= new Date(a.granted_at).toLocaleDateString() %></td>
+            <td class="small muted" style="white-space:nowrap;"><%= new Date(l.created_at).toLocaleString('en-IN') %></td>
+            <td class="small"><%= l.by || (l.admin_id ? l.admin_id.slice(0, 8) : 'system') %></td>
+            <td class="small">
+              <strong><%= l.action %></strong>
+              <div class="muted">
+                <% if (l.target_table === 'provider_profiles' || (l.action || '').startsWith('provider.')) { %><a href="/providers/<%= l.target_id %>"><%= l.target_table %></a>
+                <% } else if (l.target_table === 'organizations') { %><a href="/organizations/<%= l.target_id %>"><%= l.target_table %></a>
+                <% } else if (l.target_table === 'users' || l.target_table === 'client_profiles') { %><a href="/users/<%= l.target_id %>"><%= l.target_table %></a>
+                <% } else { %><%= l.target_table %><% } %>
+              </div>
+            </td>
+            <td class="small muted audit-details"><%= l.details && Object.keys(l.details).length ? JSON.stringify(l.details) : '' %></td>
           </tr>
         <% }) %>
       </tbody>
     </table>
+    <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+      <% if (page > 1) { %><a class="btn btn-secondary btn-sm" href="/settings?page=<%= page - 1 %><%= action ? '&action=' + encodeURIComponent(action) : '' %>">← Newer</a><% } %>
+      <span class="small muted">Page <%= page %> of <%= pages %></span>
+      <% if (page < pages) { %><a class="btn btn-secondary btn-sm" href="/settings?page=<%= page + 1 %><%= action ? '&action=' + encodeURIComponent(action) : '' %>">Older →</a><% } %>
+    </div>
   <% } %>
 </div>

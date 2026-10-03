@@ -1,0 +1,175 @@
+<%
+  const status = profile ? profile.application_status : null;
+  const badgeFor = (s) => s === 'approved' ? 'badge-success' : (s === 'rejected' || s === 'suspended') ? 'badge-danger' : 'badge-warn';
+  const missingList = check.items.filter(i => !i.ok).map(i => i.label).join(', ').replace(/'/g, '');
+%>
+<div class="topbar">
+  <div>
+    <h1><%= profile ? profile.full_name : (user && user.email) %></h1>
+    <div class="subtitle">
+      <% if (profile) { %>
+        <span class="badge <%= badgeFor(status) %>"><%= status.replace('_', ' ') %></span>
+        <% if (profile.is_publicly_listed) { %><span class="badge badge-success">Listed in app</span><% } else { %><span class="badge badge-neutral">Not listed</span><% } %>
+      <% } else { %>
+        <span class="badge badge-warn">No profile yet</span>
+      <% } %>
+      <% if (user && user.status !== 'active') { %><span class="badge badge-danger">account <%= user.status %></span><% } %>
+      <% if (user && user.role !== 'provider') { %><span class="badge badge-warn">role: <%= user.role %></span><% } %>
+    </div>
+  </div>
+  <div class="pill-nav">
+    <a class="btn btn-secondary btn-sm" href="/providers">Back to providers</a>
+    <% if (user) { %><a class="btn btn-secondary btn-sm" href="/users/<%= user.id %>">Account</a><% } %>
+  </div>
+</div>
+
+<% if (!profile) { %>
+  <div class="card">
+    <p style="margin-top:0;">This account signed up as a provider but hasn't created a profile, so there's nothing to review yet.</p>
+    <table>
+      <tr><td class="muted">Email</td><td><%= user.email || '—' %></td></tr>
+      <tr><td class="muted">Phone</td><td><%= user.phone || '—' %></td></tr>
+      <tr><td class="muted">Signed up</td><td><%= new Date(user.created_at).toLocaleString('en-IN') %></td></tr>
+    </table>
+    <form method="POST" action="/providers/<%= user.id %>/remind" style="margin-top:12px;">
+      <button class="btn btn-primary btn-sm" type="submit">Email them a reminder</button>
+    </form>
+  </div>
+<% } else { %>
+
+<div class="card decision-bar">
+  <div>
+    <strong>Decision</strong>
+    <div class="small muted">
+      <% if (status === 'approved') { %>Approved <%= profile.approved_at ? new Date(profile.approved_at).toLocaleDateString('en-IN') : '' %> and visible to clients.
+      <% } else if (status === 'rejected') { %>Rejected<%= profile.rejection_reason ? ': ' + profile.rejection_reason : '' %>. You can still approve if they've fixed things.
+      <% } else if (status === 'suspended') { %>Hidden from clients<%= profile.rejection_reason ? ' — ' + profile.rejection_reason : '' %>. Reinstate to list them again.
+      <% } else { %>Waiting for review. Approving lists them in the app immediately; they're notified in-app and by email.<% } %>
+    </div>
+  </div>
+  <div class="decision-actions">
+    <% if (allowed.includes('approve')) { %>
+      <form method="POST" action="/providers/<%= profile.user_id %>/decision"
+        <% if (!check.ready) { %>onsubmit="return confirm('Missing: <%= missingList %>.\n\nApprove anyway?');"<% } %>>
+        <input type="hidden" name="decision" value="approve" />
+        <button class="btn btn-primary btn-sm" type="submit"><%= status === 'suspended' ? 'Reinstate' : 'Approve' %></button>
+      </form>
+    <% } %>
+    <% if (allowed.includes('reject')) { %>
+      <details class="inline-details">
+        <summary class="btn btn-danger btn-sm">Reject…</summary>
+        <form method="POST" action="/providers/<%= profile.user_id %>/decision" class="details-form">
+          <input type="hidden" name="decision" value="reject" />
+          <label class="small" for="reject_reason">Reason (sent to the provider)</label>
+          <textarea id="reject_reason" name="reason" rows="3" required placeholder="e.g. License number couldn't be verified with RCI."></textarea>
+          <button class="btn btn-danger btn-sm" type="submit">Confirm rejection</button>
+        </form>
+      </details>
+    <% } %>
+    <% if (allowed.includes('suspend')) { %>
+      <details class="inline-details">
+        <summary class="btn btn-secondary btn-sm">Suspend…</summary>
+        <form method="POST" action="/providers/<%= profile.user_id %>/decision" class="details-form">
+          <input type="hidden" name="decision" value="suspend" />
+          <% if (stats.upcoming) { %>
+            <div class="small" style="color:var(--danger, #b42318);">They have <%= stats.upcoming %> upcoming booked session(s). Suspending hides them from new bookings but does not cancel those.</div>
+          <% } %>
+          <label class="small" for="suspend_reason">Reason (sent to the provider)</label>
+          <textarea id="suspend_reason" name="reason" rows="2" placeholder="Optional"></textarea>
+          <button class="btn btn-secondary btn-sm" type="submit">Confirm suspension</button>
+        </form>
+      </details>
+    <% } %>
+    <% if (['draft','submitted','under_review'].includes(status) && !check.ready) { %>
+      <form method="POST" action="/providers/<%= profile.user_id %>/remind">
+        <button class="btn btn-secondary btn-sm" type="submit">Ask them to finish profile</button>
+      </form>
+    <% } %>
+  </div>
+</div>
+
+<div class="grid grid-2col" style="margin-top:16px;">
+  <div class="card">
+    <div class="card-header"><h2>Profile</h2></div>
+    <div class="provider-head">
+      <% if (safeUrl(profile.photo_url)) { %>
+        <a href="<%= safeUrl(profile.photo_url) %>" target="_blank" rel="noopener"><img class="provider-photo" src="<%= safeUrl(profile.photo_url) %>" alt="" /></a>
+      <% } else { %>
+        <div class="provider-photo provider-photo-empty">No photo</div>
+      <% } %>
+      <div>
+        <div><strong><%= profile.full_name %></strong></div>
+        <div class="small"><%= profile.professional_title %> · <%= profile.years_experience %> yrs</div>
+        <div class="small muted"><%= rupees(profile.base_session_rate) %> per session</div>
+        <% if (safeUrl(profile.video_intro_url)) { %><div class="small"><a href="<%= safeUrl(profile.video_intro_url) %>" target="_blank" rel="noopener">Watch intro video ↗</a></div><% } %>
+      </div>
+    </div>
+    <table>
+      <tr><td class="muted">Email</td><td><%= user ? user.email : '—' %></td></tr>
+      <tr><td class="muted">Phone</td><td><%= user && user.phone ? user.phone : '—' %></td></tr>
+      <tr><td class="muted">License / reg. no.</td><td><%= profile.license_no || '—' %></td></tr>
+      <tr><td class="muted">Qualifications</td><td><%= (profile.education_credentials || []).join(' · ') || '—' %></td></tr>
+      <tr><td class="muted">Age groups</td><td><%= (profile.age_groups_served || []).join(', ').replace(/_/g, ' ') || '—' %></td></tr>
+      <tr><td class="muted">Specialties</td><td><%- specialties.length ? specialties.map(s => '<span class="chip">' + s.name.replace(/</g, '&lt;') + (s.is_approved === false ? ' (custom)' : '') + '</span>').join(' ') : '—' %></td></tr>
+      <tr><td class="muted">Approaches</td><td><%- approaches.length ? approaches.map(s => '<span class="chip">' + s.name.replace(/</g, '&lt;') + '</span>').join(' ') : '—' %></td></tr>
+      <tr><td class="muted">Languages</td><td><%- languages.length ? languages.map(s => '<span class="chip">' + s.name.replace(/</g, '&lt;') + '</span>').join(' ') : '—' %></td></tr>
+      <tr><td class="muted">Signed up</td><td class="small"><%= new Date(profile.created_at).toLocaleString('en-IN') %></td></tr>
+      <tr><td class="muted">Last updated</td><td class="small"><%= new Date(profile.updated_at).toLocaleString('en-IN') %></td></tr>
+    </table>
+    <% if (profile.bio) { %>
+      <div class="form-section-eyebrow" style="margin-top:14px;">Bio</div>
+      <p class="small" style="white-space:pre-wrap; margin:4px 0 0;"><%= profile.bio %></p>
+    <% } %>
+    <% if (profile.approach_statement) { %>
+      <div class="form-section-eyebrow" style="margin-top:14px;">Approach</div>
+      <p class="small" style="white-space:pre-wrap; margin:4px 0 0;"><%= profile.approach_statement %></p>
+    <% } %>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-header"><h2>Review checklist</h2><span class="small muted"><%= check.items.length - check.missing %>/<%= check.items.length %></span></div>
+      <ul class="checklist">
+        <% check.items.forEach(i => { %>
+          <li class="<%= i.ok ? 'ok' : 'miss' %>"><%= i.ok ? '✓' : '✕' %> <%= i.label %></li>
+        <% }) %>
+      </ul>
+      <p class="small muted" style="margin-bottom:0;">Verify the license number with the issuing council (e.g. RCI) before approving. The checklist doesn't block approval.</p>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header"><h2>Activity &amp; payouts</h2></div>
+      <table>
+        <tr><td class="muted">Sessions (all / completed)</td><td><%= stats.total %> / <%= stats.completed %></td></tr>
+        <tr><td class="muted">Upcoming booked</td><td><%= stats.upcoming %></td></tr>
+        <tr><td class="muted">Open future slots</td><td><%= stats.openSlots %><% if (status === 'approved' && !stats.openSlots) { %> <span class="badge badge-warn">no availability</span><% } %></td></tr>
+        <tr><td class="muted">Rating</td><td><%= profile.rating_count ? profile.rating_avg + ' (' + profile.rating_count + ')' : '—' %></td></tr>
+        <tr><td class="muted">Payout / KYC</td><td>
+          <span class="badge <%= profile.kyc_status === 'verified' ? 'badge-success' : profile.kyc_status === 'failed' ? 'badge-danger' : 'badge-neutral' %>"><%= profile.kyc_status.replace('_', ' ') %></span>
+          <% if (profile.payout_bank_account_last4) { %><span class="small muted">· a/c ••<%= profile.payout_bank_account_last4 %> <%= profile.payout_ifsc || '' %></span><% } %>
+          <div class="small muted">Not required for listing — only for receiving payouts.</div>
+        </td></tr>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header"><h2>Decision history</h2></div>
+      <% if (!reviews.length) { %>
+        <div class="empty-state small">No decisions yet.</div>
+      <% } else { %>
+        <table>
+          <tbody>
+            <% reviews.forEach(r => { %>
+              <tr>
+                <td><span class="badge <%= badgeFor(r.decision) %>"><%= r.decision %></span></td>
+                <td class="small"><%= r.reviewer || (r.reviewed_by ? 'admin' : 'via SQL') %><% if (r.decision_reason) { %><div class="muted"><%= r.decision_reason %></div><% } %></td>
+                <td class="small muted"><%= r.reviewed_at ? new Date(r.reviewed_at).toLocaleString('en-IN') : '' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+</div>
+<% } %>
