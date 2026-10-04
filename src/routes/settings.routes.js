@@ -77,6 +77,13 @@ async function checks() {
     }
   }
 
+  const be = require('../lib/backend').config();
+  out.push({
+    name: 'Backend admin API (sessions & refunds)',
+    ok: be.ready,
+    detail: be.ready ? be.base : 'WMT_BACKEND_URL and/or ADMIN_INTERNAL_API_KEY not set — the Sessions evidence, review queue and refunds pages will show an error.',
+  });
+
   out.push({
     name: 'Session secret',
     ok: Boolean(process.env.SESSION_SECRET),

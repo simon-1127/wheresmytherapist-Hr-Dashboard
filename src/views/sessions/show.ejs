@@ -1,0 +1,441 @@
+<%
+  const s = session || {};
+  const st = s.status;
+  const badgeFor = (v) => ['completed', 'processed', 'releasable', 'paid', 'none'].includes(v) ? 'badge-success'
+    : ['failed', 'forfeited', 'no_show_provider', 'no_show_both', 'interrupted', 'cancelled_by_provider', 'disputed', 'provider', 'TAMPERED'].includes(v) ? 'badge-danger'
+    : ['held', 'pending', 'initiated', 'pending_payment', 'no_show_client', 'client'].includes(v) ? 'badge-warn'
+    : 'badge-neutral';
+  const mins = (sec) => sec == null ? '—' : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, '0')} s`;
+  const who = (uid) => !uid ? '—' : (actors[uid] || (people.client && people.client.id === uid ? 'client' : people.provider && people.provider.id === uid ? 'provider' : uid.slice(0, 8)));
+  const settlement = settlements[0] || null;
+  const totalRefunded = refunds.filter(r => r.status !== 'failed').reduce((n, r) => n + Number(r.amount || 0), 0);
+%>
+<div class="topbar">
+  <div>
+    <h1>Session <span class="mono" style="font-size:18px;"><%= id.slice(0, 8) %></span></h1>
+    <div class="subtitle">
+      <% if (st) { %><span class="badge <%= badgeFor(st) %>"><%= P.SESSION_STATUS[st] || st %></span><% } %>
+      <% if (s.fault) { %><span class="badge <%= badgeFor(s.fault) %>">fault: <%= P.FAULT_LABEL[s.fault] || s.fault %></span><% } %>
+      <% if (s.needs_review) { %><span class="badge badge-warn">needs review<%= s.review_reason ? ': ' + s.review_reason : '' %></span><% } %>
+      <span class="small muted mono"><%= id %></span>
+    </div>
+  </div>
+  <div class="pill-nav">
+    <a class="btn btn-secondary btn-sm" href="/sessions">Search</a>
+    <a class="btn btn-secondary btn-sm" href="/sessions/review">Review queue</a>
+  </div>
+</div>
+
+<% if (error) { %>
+  <div class="flash flash-error">Evidence from the backend is unavailable: <%= error %><% if (s.id) { %> — showing what the database has.<% } %></div>
+<% } %>
+
+<div class="card">
+  <div class="card-header"><h2>Overview</h2></div>
+  <dl class="kv">
+    <dt>Client</dt>
+    <dd>
+      <% if (people.client) { %><a href="/users/<%= people.client.id %>"><%= people.client.full_name || people.client.email %></a> <span class="small muted"><%= people.client.email %></span><% } else { %><%= s.client_name || '—' %><% } %>
+    </dd>
+    <dt>Provider</dt>
+    <dd>
+      <% if (people.provider) { %><a href="<%= viewer.role === 'super_admin' ? '/providers/' : '/users/' %><%= people.provider.id %>"><%= people.provider.full_name || people.provider.email %></a> <span class="small muted"><%= people.provider.email %></span><% } else { %><%= s.provider_name || '—' %><% } %>
+    </dd>
+    <dt>Scheduled</dt>
+    <dd><%= fmtDT(s.scheduled_start) %> → <%= fmtTime(s.scheduled_end) %> <span class="small muted">(<%= s.duration_minutes || 60 %> min)</span></dd>
+    <dt>Actual</dt>
+    <dd>
+      <% if (s.actual_start) { %><%= fmtDT(s.actual_start) %> → <%= s.actual_end ? fmtTime(s.actual_end) : 'still open' %>
+        <% if (s.scheduled_start) { const lateMin = Math.round((new Date(s.actual_start) - new Date(s.scheduled_start)) / 60000); %>
+          <span class="small muted">(<%= lateMin > 0 ? lateMin + ' min after scheduled start' : 'on time' %>)</span>
+        <% } %>
+      <% } else { %>Never started<% } %>
+    </dd>
+    <dt>Outcome</dt>
+    <dd>
+      <%= s.fault ? (P.FAULT_LABEL[s.fault] || s.fault) : 'Not decided yet' %>
+      <% if (s.outcome_decided_at) { %><span class="small muted"> · <%= who(s.outcome_decided_by) %>, <%= fmtDT(s.outcome_decided_at) %></span><% } %>
+      <% if (s.outcome_note) { %><div class="help-box" style="margin-top:6px;"><%= s.outcome_note %></div><% } %>
+    </dd>
+    <dt>Amount</dt>
+    <dd class="money">
+      <%= inr(s.amount) %>
+      <span class="small muted">· WMT 22% <%= inr(s.platform_fee_amount) %> · provider 78% <%= inr(s.provider_payout_amount) %></span>
+    </dd>
+    <dt>Refunded / refundable</dt>
+    <dd class="money"><%= inr(totalRefunded) %> refunded · <strong><%= refundable === null ? '—' : inr(refundable) %></strong> still refundable</dd>
+    <% if (s.reschedule_count) { %>
+      <dt>Reschedules</dt>
+      <dd><%= s.reschedule_count %> total · <%= s.client_reschedule_count || 0 %> by client · <%= s.provider_fault_count || 0 %> provider fault(s)<% if (s.reschedule_state) { %> · state: <%= s.reschedule_state %><% } %></dd>
+    <% } %>
+    <% if (s.cancellation_reason) { %><dt>Cancellation</dt><dd><%= s.cancellation_reason %></dd><% } %>
+    <% if (rooms.length) { %><dt>Video rooms</dt><dd class="mono"><%= rooms.map(r => r.room_name).join(', ') %></dd><% } %>
+  </dl>
+  <p class="small muted" style="margin-bottom:0;">Policy: 60-minute sessions. At +30 min whoever is absent decides the outcome (provider / client / both absent); a platform failure is <em>interrupted</em>. Provider fault → client reschedules free; provider share is held, then forfeited if the client switches therapist.</p>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Attendance</h2></div>
+  <div class="att-grid">
+    <% ['client', 'provider'].forEach(role => { const a = attendance[role]; const ivs = intervals.filter(i => i.role === role); %>
+      <div class="att-card">
+        <h3>
+          <%= role === 'client' ? 'Client' : 'Provider' %>
+          <% if (!a || !a.first_joined_at) { %><span class="badge badge-danger">never joined</span>
+          <% } else if (a.joined_within_grace) { %><span class="badge badge-success">joined on time</span>
+          <% } else { %><span class="badge badge-warn">late</span><% } %>
+        </h3>
+        <% if (!a) { %>
+          <div class="small muted">No attendance computed yet.</div>
+        <% } else { %>
+          <dl class="kv">
+            <dt>Minutes late</dt><dd><%= a.minutes_late == null ? '—' : a.minutes_late %></dd>
+            <dt>Time present</dt><dd><%= mins(a.present_seconds) %> <span class="small muted">(<%= a.join_count || 0 %> join<%= a.join_count === 1 ? '' : 's' %>)</span></dd>
+            <dt>First joined</dt><dd><%= fmtDT(a.first_joined_at) %></dd>
+            <dt>Last left</dt><dd><%= fmtDT(a.last_left_at) %></dd>
+            <dt>Token requested</dt><dd><%= fmtDT(a.token_first_issued_at) %><% if (a.token_first_issued_at && !a.first_joined_at) { %> <span class="small muted">— opened the call screen but never connected</span><% } %></dd>
+            <dt>App join failures</dt><dd><% if (a.app_join_failures) { %><span class="badge badge-warn"><%= a.app_join_failures %></span><% } else { %>0<% } %></dd>
+          </dl>
+        <% } %>
+        <% if (ivs.length) { %>
+          <div class="form-section-eyebrow" style="margin-top:10px;">In-call intervals</div>
+          <table>
+            <tbody>
+              <% ivs.forEach(i => { %>
+                <tr>
+                  <td class="small"><%= fmtTime(i.joined_at) %> → <%= i.left_at ? fmtTime(i.left_at) : 'open' %></td>
+                  <td class="small"><%= mins(i.duration_seconds) %></td>
+                  <td><span class="tl-src src-<%= i.source %>" style="font-size:11px;"><%= P.SOURCE_LABEL[i.source] || i.source %></span></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    <% }) %>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Timeline</h2><span class="small muted"><%= timeline.length %> event(s)</span></div>
+  <div class="legend">
+    <% Object.keys(P.SOURCE_LABEL).forEach(src => { %><span class="src-<%= src %>"><%= P.SOURCE_LABEL[src] %></span><% }) %>
+  </div>
+  <% if (!timeline.length) { %>
+    <div class="empty-state small">No events recorded.</div>
+  <% } else { %>
+    <ul class="timeline">
+      <% timeline.forEach(t => { %>
+        <li class="src-<%= t.source %>">
+          <span class="tl-time"><%= fmtDT(t.at) %></span>
+          <span class="tl-src"><%= P.SOURCE_LABEL[t.source] || t.source %></span>
+          <strong><%= t.event %></strong>
+          <% if (t.role) { %><span class="small muted">· <%= t.role %></span><% } %>
+          <% if (t.user_id && !t.role) { %><span class="small muted">· <%= who(t.user_id) %></span><% } %>
+          <% if (t.verified === false) { %><span class="tl-unverified" title="Webhook signature did not verify — treat as unconfirmed.">UNVERIFIED</span><% } %>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</div>
+
+<% if (chain.length > 1 || reschedules.length) { %>
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Reschedule chain</h2></div>
+  <% if (chain.length) { %>
+    <table>
+      <thead><tr><th>Session</th><th>Scheduled</th><th>Status</th><th>Amount</th></tr></thead>
+      <tbody>
+        <% chain.forEach(c => { %>
+          <tr>
+            <td><% if (c.id === id) { %><strong class="mono"><%= c.id.slice(0, 8) %></strong> <span class="badge badge-info">this</span><% } else { %><a class="mono" href="/sessions/<%= c.id %>"><%= c.id.slice(0, 8) %></a><% } %></td>
+            <td class="small"><%= fmtDT(c.scheduled_start) %></td>
+            <td><span class="badge <%= badgeFor(c.status) %>"><%= P.SESSION_STATUS[c.status] || c.status %></span></td>
+            <td class="money small"><%= inr(c.amount) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+  <% if (reschedules.length) { %>
+    <table style="margin-top:12px;">
+      <thead><tr><th>From → to</th><th>Reason</th><th>Credit</th><th>New price</th><th>Difference</th><th>Status</th><th>When</th></tr></thead>
+      <tbody>
+        <% reschedules.forEach(r => { %>
+          <tr>
+            <td class="mono small"><a href="/sessions/<%= r.from_session_id %>"><%= String(r.from_session_id).slice(0, 8) %></a> → <a href="/sessions/<%= r.to_session_id %>"><%= String(r.to_session_id).slice(0, 8) %></a>
+              <% if (r.from_provider_id !== r.to_provider_id) { %><div class="small" style="color:var(--warning);">switched therapist</div><% } %></td>
+            <td class="small"><%= String(r.reason || '').replace(/_/g, ' ') %></td>
+            <td class="money small"><%= inr(r.credit_amount) %></td>
+            <td class="money small"><%= inr(r.new_amount) %></td>
+            <td class="money small"><%= Number(r.diff_amount) > 0 ? '+' : '' %><%= inr(r.diff_amount) %></td>
+            <td><span class="badge <%= badgeFor(r.status) %>"><%= r.status %></span></td>
+            <td class="small muted"><%= fmtDT(r.created_at) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+<% } %>
+
+<div class="grid grid-2col" style="margin-top:16px;">
+  <div class="card">
+    <div class="card-header"><h2>Payments</h2></div>
+    <% if (!payments.length) { %>
+      <div class="empty-state small">No payments.</div>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Amount</th><th>Status</th><th>Method</th><th>Razorpay</th><th>When</th></tr></thead>
+        <tbody>
+          <% payments.forEach(p => { %>
+            <tr>
+              <td class="money"><%= inr(p.amount) %></td>
+              <td><span class="badge <%= p.status === 'captured' ? 'badge-success' : p.status === 'failed' ? 'badge-danger' : 'badge-neutral' %>"><%= p.status %></span></td>
+              <td class="small"><%= p.method || '—' %></td>
+              <td class="mono small"><%= p.razorpay_payment_id || p.razorpay_order_id || '—' %></td>
+              <td class="small muted"><%= fmtDT(p.created_at) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
+  <div class="card" id="settlement">
+    <div class="card-header"><h2>Provider settlement</h2></div>
+    <% if (!settlement) { %>
+      <div class="empty-state small">No settlement row — created when the session is confirmed.</div>
+    <% } else { %>
+      <dl class="kv">
+        <dt>Status</dt><dd><span class="badge <%= badgeFor(settlement.status) %>"><%= P.SETTLEMENT_LABEL[settlement.status] || settlement.status %></span><% if (settlement.status_reason) { %> <span class="small muted"><%= String(settlement.status_reason).replace(/_/g, ' ') %></span><% } %></dd>
+        <dt>Gross</dt><dd class="money"><%= inr(settlement.gross_amount) %></dd>
+        <dt>WMT fee (22%)</dt><dd class="money"><%= inr(settlement.platform_fee_amount) %></dd>
+        <dt>Provider share (78%)</dt><dd class="money"><strong><%= inr(settlement.provider_share_amount) %></strong></dd>
+        <% if (settlement.decided_at) { %><dt>Decided</dt><dd class="small"><%= who(settlement.decided_by) %>, <%= fmtDT(settlement.decided_at) %></dd><% } %>
+        <% if (settlement.payout_id) { %><dt>Payout</dt><dd class="mono small"><%= settlement.payout_id %></dd><% } %>
+      </dl>
+    <% } %>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Refunds</h2><a class="small" href="/sessions/refunds">All refunds →</a></div>
+  <% if (!refunds.length) { %>
+    <div class="empty-state small">No refunds on this session.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Amount</th><th>Kind</th><th>Reason</th><th>Status</th><th>By</th><th>When</th><th></th></tr></thead>
+      <tbody>
+        <% refunds.forEach(r => { %>
+          <tr>
+            <td class="money"><%= inr(r.amount) %><% if (r.provider_liable) { %><div class="small" style="color:var(--warning);">provider liable</div><% } %></td>
+            <td class="small"><%= String(r.kind || '').replace(/_/g, ' ') %></td>
+            <td class="small"><%= P.REFUND_REASON_LABEL[r.reason_category] || r.reason_category %><% if (r.note) { %><div class="muted"><%= r.note %></div><% } %></td>
+            <td>
+              <span class="badge <%= badgeFor(r.status) %>"><%= r.status %></span>
+              <% if (r.razorpay_refund_id) { %><div class="mono small muted"><%= r.razorpay_refund_id %></div><% } %>
+              <% if (r.last_error) { %><div class="small" style="color:var(--danger);"><%= r.last_error %></div><% } %>
+            </td>
+            <td class="small"><%= who(r.initiated_by) %></td>
+            <td class="small muted"><%= fmtDT(r.created_at) %></td>
+            <td>
+              <% if (r.status === 'failed' && can('retry')) { %>
+                <form method="POST" action="/sessions/refunds/<%= r.id %>/retry" onsubmit="return confirm('Retry this <%= inr(r.amount) %> refund with Razorpay?');">
+                  <input type="hidden" name="session_id" value="<%= id %>" />
+                  <button class="btn btn-secondary btn-sm" type="submit">Retry</button>
+                </form>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Evidence snapshots</h2></div>
+  <p class="small muted" style="margin-top:0;">Frozen, hashed copies of the evidence taken at each decision point. "TAMPERED" means the stored copy no longer matches its SHA-256 — escalate before relying on it.</p>
+  <% if (!snapshots.length) { %>
+    <div class="empty-state small">No snapshots yet.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Kind</th><th>Integrity</th><th>SHA-256</th><th>By</th><th>When</th><th></th></tr></thead>
+      <tbody>
+        <% snapshots.forEach(sn => { %>
+          <tr>
+            <td class="small"><%= String(sn.kind || '').replace(/_/g, ' ') %></td>
+            <td>
+              <% if (sn.intact === true) { %><span class="badge badge-success">intact</span>
+              <% } else if (sn.intact === false) { %><span class="badge badge-danger">TAMPERED</span>
+              <% } else { %><span class="badge badge-neutral">unchecked</span><% } %>
+            </td>
+            <td class="mono small" title="<%= sn.sha256 %>"><%= String(sn.sha256 || '').slice(0, 16) %>…</td>
+            <td class="small"><%= sn.created_by ? who(sn.created_by) : 'system' %></td>
+            <td class="small muted"><%= fmtDT(sn.created_at) %></td>
+            <td><a class="btn btn-secondary btn-sm" href="/sessions/snapshots/<%= sn.id %>">View</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<% if (can('refund') || can('outcome') || can('settlement')) { %>
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Actions</h2><span class="small muted">Every action is audited with your name.</span></div>
+
+  <% if (can('refund')) { %>
+    <div class="action-panel" id="refund">
+      <h3>Refund</h3>
+      <% if (refundable === null) { %>
+        <p class="small muted">Refundable amount unavailable — the backend didn't answer. Reload to try again.</p>
+      <% } else if (refundable <= 0) { %>
+        <p class="small muted">Nothing left to refund on this session.</p>
+      <% } else { %>
+        <p class="small muted" style="margin-top:0;">Clients can't refund in the app; they email support and the refund is issued here. Up to <strong><%= inr(refundable) %></strong> can be refunded. You'll confirm the exact amount on the next screen.</p>
+        <form method="POST" action="/sessions/<%= id %>/refund/review" id="refund-form">
+          <div class="field">
+            <div class="seg">
+              <label><input type="radio" name="mode" value="full" checked /><span>Full <%= inr(refundable) %></span></label>
+              <label><input type="radio" name="mode" value="partial" /><span>Partial</span></label>
+            </div>
+          </div>
+          <div class="field" id="partial-amount" hidden>
+            <label for="amount_rupees">Amount (₹)</label>
+            <input type="number" id="amount_rupees" name="amount_rupees" min="0.01" step="0.01" max="<%= (refundable / 100).toFixed(2) %>" placeholder="e.g. 250.00" style="max-width:180px;" />
+            <div class="field-hint small muted">Max <%= inr(refundable) %>.</div>
+          </div>
+          <div class="field">
+            <label for="reason_category">Reason</label>
+            <select id="reason_category" name="reason_category" required>
+              <option value="">Choose…</option>
+              <% P.REFUND_REASONS.forEach(r => { %><option value="<%= r.value %>"><%= r.label %></option><% }) %>
+            </select>
+          </div>
+          <div class="field">
+            <label for="refund_note">Note (required)</label>
+            <textarea id="refund_note" name="note" rows="2" minlength="5" required placeholder="e.g. Client emailed 4 Oct — provider never joined, client did not want to reschedule."></textarea>
+          </div>
+          <div class="field">
+            <label class="small" style="display:flex; gap:8px; align-items:flex-start;">
+              <input type="checkbox" name="provider_liable" id="provider_liable" style="margin-top:3px;" />
+              <span><strong>Provider liable</strong><br /><span class="muted"><%= P.PROVIDER_LIABLE_HELP %></span></span>
+            </label>
+          </div>
+          <button class="btn btn-primary btn-sm" type="submit">Review refund →</button>
+        </form>
+      <% } %>
+    </div>
+  <% } %>
+
+  <% if (can('outcome')) { %>
+    <div class="action-panel" id="outcome">
+      <h3>Reclassify outcome</h3>
+      <p class="small muted" style="margin-top:0;">Changes who is at fault. The backend recalculates the settlement from it unless you override below.</p>
+      <form method="POST" action="/sessions/<%= id %>/outcome" onsubmit="return confirm('Change the outcome of this session?');">
+        <div class="field">
+          <label for="fault">Outcome</label>
+          <select id="fault" name="fault" required>
+            <% P.FAULTS.forEach(f => { %><option value="<%= f.value %>" data-help="<%= f.help %>" <%= s.fault === f.value ? 'selected' : '' %>><%= f.label %></option><% }) %>
+          </select>
+          <div class="help-box" id="fault-help" style="margin-top:6px;"></div>
+        </div>
+        <% if (can('settlement')) { %>
+          <div class="field">
+            <label for="outcome_settlement">Settlement (optional override)</label>
+            <select id="outcome_settlement" name="settlement">
+              <option value="">Let the backend decide from the outcome</option>
+              <% P.SETTLEMENT_STATES.forEach(x => { %><option value="<%= x.value %>"><%= x.label %> — <%= x.help %></option><% }) %>
+            </select>
+          </div>
+        <% } %>
+        <div class="field">
+          <label for="outcome_note">Note (required)</label>
+          <textarea id="outcome_note" name="note" rows="2" minlength="5" required placeholder="Why the outcome is changing, and what evidence you relied on."></textarea>
+        </div>
+        <button class="btn btn-secondary btn-sm" type="submit">Save outcome</button>
+      </form>
+    </div>
+  <% } %>
+
+  <% if (can('settlement')) { %>
+    <div class="action-panel">
+      <h3>Override settlement</h3>
+      <p class="small muted" style="margin-top:0;">Directly sets the provider's 78% share for this session<% if (settlement) { %> (currently <strong><%= P.SETTLEMENT_LABEL[settlement.status] || settlement.status %></strong>, <%= inr(settlement.provider_share_amount) %>)<% } %>.</p>
+      <% if (settlement && settlement.status === 'paid') { %>
+        <p class="small" style="color:var(--warning);">Already paid out — the backend will refuse most changes.</p>
+      <% } %>
+      <form method="POST" action="/sessions/<%= id %>/settlement" onsubmit="return confirm('Override the provider settlement for this session?');">
+        <div class="field">
+          <label for="settle_status">New status</label>
+          <select id="settle_status" name="status" required>
+            <option value="">Choose…</option>
+            <% P.SETTLEMENT_STATES.forEach(x => { %><option value="<%= x.value %>"><%= x.label %> — <%= x.help %></option><% }) %>
+          </select>
+        </div>
+        <div class="field">
+          <label for="settle_note">Note (required)</label>
+          <textarea id="settle_note" name="note" rows="2" minlength="5" required></textarea>
+        </div>
+        <button class="btn btn-secondary btn-sm" type="submit">Save settlement</button>
+      </form>
+    </div>
+  <% } %>
+</div>
+<% } %>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header"><h2>Audit log</h2><span class="small muted">Latest 50 entries for this session and its refunds</span></div>
+  <% if (!audit.length) { %>
+    <div class="empty-state small">Nothing logged yet.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead>
+      <tbody>
+        <% audit.forEach(l => { %>
+          <tr>
+            <td class="small muted" style="white-space:nowrap;"><%= fmtDT(l.created_at) %></td>
+            <td class="small"><%= l.admin_email || (l.admin_id ? l.admin_id.slice(0, 8) : 'system') %></td>
+            <td class="small"><strong><%= l.action %></strong><div class="muted"><%= l.target_table %></div></td>
+            <td class="small muted audit-details"><%= l.details && Object.keys(l.details).length ? JSON.stringify(l.details) : '' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<script>
+  (function () {
+    var form = document.getElementById('refund-form');
+    if (form) {
+      var box = document.getElementById('partial-amount');
+      var amt = document.getElementById('amount_rupees');
+      form.querySelectorAll('input[name=mode]').forEach(function (r) {
+        r.addEventListener('change', function () {
+          var partial = form.mode.value === 'partial';
+          box.hidden = !partial;
+          amt.required = partial;
+        });
+      });
+      // Default "provider liable" on for a provider-fault refund, unless
+      // the admin has already set it by hand.
+      var reason = document.getElementById('reason_category');
+      var liable = document.getElementById('provider_liable');
+      var touched = false;
+      liable.addEventListener('change', function () { touched = true; });
+      reason.addEventListener('change', function () {
+        if (!touched) liable.checked = reason.value === 'provider_fault';
+      });
+    }
+    var fault = document.getElementById('fault');
+    if (fault) {
+      var help = document.getElementById('fault-help');
+      var show = function () { help.textContent = fault.options[fault.selectedIndex].getAttribute('data-help') || ''; };
+      fault.addEventListener('change', show);
+      show();
+    }
+  })();
+</script>

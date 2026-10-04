@@ -12,6 +12,7 @@
     <a class="<%= tab === 'alerts' ? 'is-active' : '' %>" href="/support/user/<%= clientProfile.id %>?tab=alerts">Alerts</a>
     <a class="<%= tab === 'mood' ? 'is-active' : '' %>" href="/support/user/<%= clientProfile.id %>?tab=mood&days=<%= days %>">Mood tracking</a>
     <a class="<%= tab === 'wellness' ? 'is-active' : '' %>" href="/support/user/<%= clientProfile.id %>?tab=wellness">Wellness</a>
+    <a href="/sessions?user=<%= clientProfile.id %>">Sessions</a>
   </div>
 </div>
 

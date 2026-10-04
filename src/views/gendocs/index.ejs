@@ -1,91 +1,65 @@
 <div class="topbar">
   <div>
     <h1>General doctors</h1>
-    <div class="subtitle">Contracted physicians serving specific client organizations.</div>
+    <div class="subtitle">Contracted physicians for specific organizations. No payments in this flow — consults are billed to the organization.</div>
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header"><h2>Add a doctor</h2></div>
+<details class="card" style="margin-bottom:16px;" <%= counts.all === 0 ? 'open' : '' %>>
+  <summary style="cursor:pointer; font-weight:600;">Add a doctor</summary>
   <p class="small muted">
-    Creates a new account with a temporary password, emailed to them. They set their own password and
-    complete the rest of their profile in the app. Assign their organizations once the account exists —
-    a doctor with no assigned organization is visible to nobody.
+    Creates their account with a temporary password (shown once and emailed). They sign in to the app, set their own
+    password and complete their profile; you review it here, approve, and assign their organizations.
   </p>
   <form method="POST" action="/gendocs">
     <div class="grid grid-2col">
-      <div class="field">
-        <label for="gd_email">Email</label>
-        <input type="email" id="gd_email" name="email" required />
-      </div>
-      <div class="field">
-        <label for="gd_name">Full name</label>
-        <input type="text" id="gd_name" name="full_name" required />
-      </div>
-      <div class="field">
-        <label for="gd_title">Professional title</label>
-        <input type="text" id="gd_title" name="professional_title" placeholder="MBBS, General Physician" />
-      </div>
-      <div class="field">
-        <label for="gd_reg">Registration number</label>
-        <input type="text" id="gd_reg" name="registration_no" placeholder="Medical council registration" />
-      </div>
-      <div class="field">
-        <label for="gd_council">Registration council</label>
-        <input type="text" id="gd_council" name="registration_council" placeholder="e.g. Delhi Medical Council" />
-      </div>
+      <div class="field"><label for="gd_email">Email</label><input type="email" id="gd_email" name="email" required /></div>
+      <div class="field"><label for="gd_name">Full name</label><input type="text" id="gd_name" name="full_name" required minlength="2" /></div>
+      <div class="field"><label for="gd_title">Professional title</label><input type="text" id="gd_title" name="professional_title" placeholder="MBBS, General Physician" /></div>
+      <div class="field"><label for="gd_reg">Registration number</label><input type="text" id="gd_reg" name="registration_no" placeholder="Medical council registration" /></div>
+      <div class="field"><label for="gd_council">Registration council</label><input type="text" id="gd_council" name="registration_council" placeholder="e.g. Delhi Medical Council" /></div>
     </div>
-    <button class="btn btn-primary" type="submit">Create account &amp; invite</button>
+    <button class="btn btn-primary" type="submit">Create account &amp; email them</button>
   </form>
-</div>
+</details>
 
-<div class="tabs" style="margin-top:16px;">
-  <a class="tab <%= filter === 'all' ? 'active' : '' %>" href="/gendocs?status=all">All</a>
-  <a class="tab <%= filter === 'draft' ? 'active' : '' %>" href="/gendocs?status=draft">Onboarding</a>
-  <a class="tab <%= filter === 'pending_review' ? 'active' : '' %>" href="/gendocs?status=pending_review">Pending review</a>
-  <a class="tab <%= filter === 'approved' ? 'active' : '' %>" href="/gendocs?status=approved">Approved</a>
-  <a class="tab <%= filter === 'rejected' ? 'active' : '' %>" href="/gendocs?status=rejected">Rejected</a>
+<div class="tabs">
+  <a class="tab <%= tab === 'review' ? 'active' : '' %>" href="/gendocs?tab=review">Needs review <span class="tab-count"><%= counts.review %></span></a>
+  <a class="tab <%= tab === 'approved' ? 'active' : '' %>" href="/gendocs?tab=approved">Approved <span class="tab-count"><%= counts.approved %></span></a>
+  <a class="tab <%= tab === 'suspended' ? 'active' : '' %>" href="/gendocs?tab=suspended">Suspended <span class="tab-count"><%= counts.suspended %></span></a>
+  <a class="tab <%= tab === 'rejected' ? 'active' : '' %>" href="/gendocs?tab=rejected">Rejected <span class="tab-count"><%= counts.rejected %></span></a>
+  <a class="tab <%= tab === 'all' ? 'active' : '' %>" href="/gendocs?tab=all">All <span class="tab-count"><%= counts.all %></span></a>
 </div>
 
 <div class="card">
   <% if (!gendocs.length) { %>
-    <div class="empty-state">No doctors yet.</div>
+    <div class="empty-state"><%= tab === 'review' ? 'Nobody waiting for review.' : 'No doctors here.' %></div>
   <% } else { %>
     <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Title</th>
-          <th>Registration</th>
-          <th>Organizations</th>
-          <th>Status</th>
-          <th>Queue</th>
-          <th></th>
-        </tr>
-      </thead>
+      <thead><tr><th>Doctor</th><th>Registration</th><th>Organizations</th><th>Status</th><th>Profile</th><th>Today</th><th></th></tr></thead>
       <tbody>
-        <% gendocs.forEach(g => { %>
-          <%
-            const active = (g.gendoc_org_assignments || []).filter(a => a.is_active);
-          %>
+        <% gendocs.forEach(g => { const active = (g.gendoc_org_assignments || []).filter(a => a.is_active); %>
           <tr>
-            <td><a href="/gendocs/<%= g.user_id %>"><%= g.full_name %></a></td>
-            <td class="small muted"><%= g.professional_title %></td>
-            <td class="small muted"><%= g.registration_no || '—' %></td>
+            <td>
+              <a href="/gendocs/<%= g.user_id %>"><strong><%= g.full_name %></strong></a>
+              <div class="small muted"><%= g.professional_title %><%= g.account ? ' · ' + g.account.email : '' %></div>
+            </td>
+            <td class="small muted"><%= g.registration_no || '—' %><%= g.registration_council ? ' · ' + g.registration_council : '' %></td>
             <td class="small">
-              <% if (!active.length) { %>
-                <span class="badge badge-neutral">Unassigned</span>
-              <% } else { %>
-                <%= active.map(a => a.organizations && a.organizations.company_name).filter(Boolean).join(', ') %>
-              <% } %>
+              <% if (!active.length) { %><span class="badge badge-warn">Unassigned</span>
+              <% } else { %><%= active.map(a => a.organizations && a.organizations.company_name).filter(Boolean).join(', ') %><% } %>
             </td>
             <td>
-              <span class="badge <%= g.application_status === 'approved' ? 'badge-success' : 'badge-info' %>"><%= g.application_status %></span>
+              <span class="badge <%= g.application_status === 'approved' ? 'badge-success' : ['rejected','suspended'].includes(g.application_status) ? 'badge-danger' : 'badge-warn' %>"><%= g.application_status.replace('_', ' ') %></span>
+              <% if (g.account && g.account.status !== 'active') { %><span class="badge badge-danger">account <%= g.account.status %></span><% } %>
             </td>
-            <td>
-              <span class="badge <%= g.is_accepting_queue ? 'badge-success' : 'badge-neutral' %>">
-                <%= g.is_accepting_queue ? 'Open' : 'Closed' %>
-              </span>
+            <td class="small">
+              <% if (g.check.ready) { %><span class="badge badge-success">Complete</span>
+              <% } else { %><span class="badge badge-warn" title="<%= g.check.items.filter(i => !i.ok).map(i => i.label).join(', ') %>"><%= g.check.missing %> missing</span><% } %>
+            </td>
+            <td class="small">
+              <span class="badge <%= g.is_accepting_queue ? 'badge-success' : 'badge-neutral' %>"><%= g.is_accepting_queue ? 'Open' : 'Closed' %></span>
+              <% if (g.waitingToday) { %><span class="small muted"><%= g.waitingToday %> waiting</span><% } %>
             </td>
             <td><a class="btn btn-secondary btn-sm" href="/gendocs/<%= g.user_id %>">Manage</a></td>
           </tr>
@@ -98,9 +72,8 @@
 <% if (!orgs.length) { %>
   <div class="card" style="margin-top:16px;">
     <p class="small muted" style="margin:0;">
-      No organization currently has the general doctor feature enabled. It's switched on automatically for
-      organizations on the HR-Onboarding plan — set that on the organization first, or doctors will have
-      nowhere to be assigned.
+      No active organization has the general doctor feature. It's switched on for organizations on the HR-Onboarding plan —
+      set that on the organization first, or doctors will have nowhere to be assigned.
     </p>
   </div>
 <% } %>

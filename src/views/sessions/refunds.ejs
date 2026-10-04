@@ -1,0 +1,52 @@
+<div class="topbar">
+  <div>
+    <h1>Refunds</h1>
+    <div class="subtitle">Every refund issued from the portal or by the reschedule flow. Failed ones can be retried once the cause is fixed.</div>
+  </div>
+  <div class="pill-nav">
+    <a class="btn btn-secondary btn-sm" href="/sessions">Search sessions</a>
+  </div>
+</div>
+
+<% if (error) { %><div class="flash flash-error">Could not load refunds: <%= error %></div><% } %>
+
+<div class="tabs">
+  <a class="tab <%= !status ? 'active' : '' %>" href="/sessions/refunds">All</a>
+  <% P.REFUND_STATUSES.forEach(x => { %>
+    <a class="tab <%= status === x ? 'active' : '' %>" href="/sessions/refunds?status=<%= x %>"><%= x.charAt(0).toUpperCase() + x.slice(1) %></a>
+  <% }) %>
+</div>
+
+<div class="card">
+  <% if (!refunds.length) { %>
+    <div class="empty-state"><%= status === 'failed' ? 'No failed refunds.' : 'No refunds.' %></div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>When</th><th>Session</th><th>Amount</th><th>Kind / reason</th><th>Status</th><th>By</th><th></th></tr></thead>
+      <tbody>
+        <% refunds.forEach(r => { %>
+          <tr>
+            <td class="small muted" style="white-space:nowrap;"><%= fmtDT(r.created_at) %></td>
+            <td><a class="mono" href="/sessions/<%= r.session_id %>"><%= String(r.session_id || '').slice(0, 8) %></a></td>
+            <td class="money"><%= inr(r.amount) %><% if (r.provider_liable) { %><div class="small" style="color:var(--warning);">provider liable</div><% } %></td>
+            <td class="small"><%= String(r.kind || '').replace(/_/g, ' ') %><div class="muted"><%= P.REFUND_REASON_LABEL[r.reason_category] || r.reason_category %></div></td>
+            <td>
+              <span class="badge <%= r.status === 'processed' ? 'badge-success' : r.status === 'failed' ? 'badge-danger' : 'badge-warn' %>"><%= r.status %></span>
+              <% if (r.attempts > 1) { %><span class="small muted"><%= r.attempts %> attempts</span><% } %>
+              <% if (r.razorpay_refund_id) { %><div class="mono small muted"><%= r.razorpay_refund_id %></div><% } %>
+              <% if (r.last_error) { %><div class="small" style="color:var(--danger); max-width:320px;"><%= r.last_error %></div><% } %>
+            </td>
+            <td class="small"><%= actors[r.initiated_by] || (r.initiated_by ? String(r.initiated_by).slice(0, 8) : 'system') %></td>
+            <td>
+              <% if (r.status === 'failed' && can('retry')) { %>
+                <form method="POST" action="/sessions/refunds/<%= r.id %>/retry" onsubmit="this.querySelector('button').disabled = true; return confirm('Retry this <%= inr(r.amount) %> refund with Razorpay?');">
+                  <button class="btn btn-secondary btn-sm" type="submit">Retry</button>
+                </form>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>

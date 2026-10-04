@@ -171,7 +171,10 @@ router.post('/hr/reset-password', async (req, res) => {
 // never touches the super admin login above.
 
 router.get('/support/login', (req, res) => {
-  if (req.session.superAdmin || req.session.supportAgent) return res.redirect('/support');
+  if (req.session.superAdmin) return res.redirect('/support');
+  if (req.session.supportAgent) {
+    return res.redirect(req.session.supportAgent.roleType === 'finance' ? '/sessions/refunds' : '/support');
+  }
   res.render('auth/supportLogin', { error: null, layout: false });
 });
 
@@ -188,27 +191,29 @@ router.post('/support/login', loginLimiter('auth/supportLogin'), async (req, res
       return res.render('auth/supportLogin', { error: 'Invalid email or password.', layout: false });
     }
 
+    // Support agents and finance share this login. Finance lands on
+    // Sessions & Refunds; support agents on the crisis console.
     const { data: roleRow, error: roleErr } = await supabase
       .from('admin_roles')
       .select('role_type')
       .eq('user_id', data.user.id)
-      .eq('role_type', 'support_agent')
+      .in('role_type', ['support_agent', 'finance'])
       .maybeSingle();
 
     if (roleErr || !roleRow) {
       return res.render('auth/supportLogin', {
-        error: 'This account does not have support access.',
+        error: 'This account does not have support or finance access.',
         layout: false,
       });
     }
 
     clearLimit(req);
-    req.session.supportAgent = { id: data.user.id, email: data.user.email, checkedAt: Date.now() };
+    req.session.supportAgent = { id: data.user.id, email: data.user.email, roleType: roleRow.role_type, checkedAt: Date.now() };
     // Support agents live in this dashboard for a whole shift — same 30-day
     // opt-in as the super admin login, for the same reason.
     req.session.remember = rememberMe === 'on';
     if (req.session.remember) req.sessionOptions.maxAge = REMEMBER_ME_MAX_AGE;
-    res.redirect('/support');
+    res.redirect(roleRow.role_type === 'finance' ? '/sessions/refunds' : '/support');
   } catch (err) {
     console.error('[auth] support agent login failed:', err);
     res.render('auth/supportLogin', { error: 'Something went wrong. Try again.', layout: false });

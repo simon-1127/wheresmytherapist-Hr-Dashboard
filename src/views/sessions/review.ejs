@@ -1,0 +1,61 @@
+<div class="topbar">
+  <div>
+    <h1>Review queue</h1>
+    <div class="subtitle">Sessions the backend flagged for a human decision. Open one, check the evidence, then reclassify, refund or adjust the settlement.</div>
+  </div>
+  <div class="pill-nav">
+    <a class="btn btn-secondary btn-sm" href="/sessions">Search sessions</a>
+  </div>
+</div>
+
+<% if (error) { %><div class="flash flash-error">Could not load the review queue: <%= error %></div><% } %>
+
+<div class="card">
+  <form method="GET" action="/sessions/review" style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+    <div class="field" style="margin:0;">
+      <label class="small" for="rreason">Reason</label>
+      <select id="rreason" name="reason">
+        <option value="">Any reason</option>
+        <% reasons.forEach(r => { %><option value="<%= r %>" <%= f.reason === r ? 'selected' : '' %>><%= String(r).replace(/_/g, ' ') %></option><% }) %>
+      </select>
+    </div>
+    <div class="field" style="margin:0;">
+      <label class="small" for="rsettle">Provider share</label>
+      <select id="rsettle" name="settlement">
+        <option value="">Any</option>
+        <% ['held', 'releasable', 'forfeited', 'voided', 'paid', 'rolled_over', 'none'].forEach(x => { %>
+          <option value="<%= x %>" <%= f.settlement === x ? 'selected' : '' %>><%= x === 'none' ? 'No settlement' : P.SETTLEMENT_LABEL[x] %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div class="field" style="margin:0; flex:1; min-width:200px;">
+      <label class="small" for="rq">Name or id</label>
+      <input id="rq" type="text" name="q" value="<%= f.q %>" />
+    </div>
+    <button class="btn btn-primary btn-sm" type="submit">Filter</button>
+    <% if (f.reason || f.settlement || f.q) { %><a class="btn btn-secondary btn-sm" href="/sessions/review">Clear</a><% } %>
+  </form>
+
+  <div class="small muted" style="margin-bottom:8px;"><%= items.length %> of <%= total %> flagged session(s)</div>
+  <% if (!items.length) { %>
+    <div class="empty-state"><%= total ? 'Nothing matches those filters.' : 'Nothing waiting for review.' %></div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Session</th><th>Reason</th><th>Scheduled</th><th>Client</th><th>Provider</th><th>Status</th><th>Provider share</th><th></th></tr></thead>
+      <tbody>
+        <% items.forEach(i => { %>
+          <tr>
+            <td><a class="mono" href="/sessions/<%= i.id %>"><%= String(i.id).slice(0, 8) %></a></td>
+            <td><span class="badge badge-warn"><%= String(i.review_reason).replace(/_/g, ' ') %></span></td>
+            <td class="small"><%= fmtDT(i.scheduled_start) %></td>
+            <td class="small"><%= i.client_name %></td>
+            <td class="small"><%= i.provider_name %></td>
+            <td class="small"><%= P.SESSION_STATUS[i.status] || i.status || '—' %><% if (i.fault) { %><div class="muted"><%= P.FAULT_LABEL[i.fault] || i.fault %></div><% } %></td>
+            <td class="small"><%= i.settlement_status ? (P.SETTLEMENT_LABEL[i.settlement_status] || i.settlement_status) : '—' %></td>
+            <td><a class="btn btn-secondary btn-sm" href="/sessions/<%= i.id %>">Evidence</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>

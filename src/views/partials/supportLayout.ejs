@@ -150,15 +150,24 @@
           <img src="/img/logo.png" alt="" />
           <div>
             <div class="name">Where's My Therapist</div>
-            <div class="tag">Support console</div>
+            <div class="tag"><%= typeof staffRole !== 'undefined' && staffRole === 'finance' ? 'Finance console' : 'Support console' %></div>
           </div>
         </div>
+        <%
+          const navRole = typeof staffRole !== 'undefined' && staffRole ? staffRole : 'support_agent';
+          const showCrisis = navRole === 'support_agent' || navRole === 'super_admin';
+        %>
         <nav class="support-nav">
+          <% if (showCrisis) { %>
           <a class="<%= path.startsWith('/support/alerts') || path === '/support' ? 'is-active' : '' %>" href="/support/alerts">
             Crisis alerts<% if (typeof navCounts !== 'undefined' && navCounts.new) { %><span class="count"><%= navCounts.new %></span><% } %>
           </a>
           <a class="<%= path.startsWith('/support/clients') ? 'is-active' : '' %>" href="/support/clients">Clients</a>
           <a class="<%= path.startsWith('/support/questions') || path.startsWith('/support/options') ? 'is-active' : '' %>" href="/support/questions">Check-in questions</a>
+          <% } %>
+          <a class="<%= path === '/sessions' || /^\/sessions\/[0-9a-f-]{36}/.test(path) ? 'is-active' : '' %>" href="/sessions">Sessions</a>
+          <a class="<%= path.startsWith('/sessions/review') ? 'is-active' : '' %>" href="/sessions/review">Review queue</a>
+          <a class="<%= path.startsWith('/sessions/refunds') ? 'is-active' : '' %>" href="/sessions/refunds">Refunds</a>
         </nav>
       </div>
       <div class="support-bar-right">

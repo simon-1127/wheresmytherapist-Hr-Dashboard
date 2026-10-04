@@ -4,6 +4,9 @@ const { requireSuperAdmin } = require('../middleware/auth');
 const { logAction } = require('../lib/audit');
 const { uuidParams, sanitizeSearch } = require('../lib/validate');
 const { delistIfListed } = require('../lib/providers');
+const gendocs = require('../lib/gendocs');
+const { searchSessions } = require('../lib/sessionQueries');
+const { inr, SESSION_STATUS, FAULT_LABEL, SETTLEMENT_LABEL } = require('../lib/sessionPolicy');
 
 const router = express.Router();
 router.use(requireSuperAdmin);
@@ -116,7 +119,25 @@ router.get('/:id', async (req, res) => {
     supabase.from('subscription_tiers').select('id, display_name').order('sort_order'),
   ]);
 
+  const tab = req.query.tab === 'sessions' ? 'sessions' : 'overview';
+  let sessions = [];
+  let sessionsError = null;
+  if (tab === 'sessions') {
+    // As client AND as provider — evidence lives on the Sessions pages.
+    sessions = await searchSessions({ userId: id, limit: 200 }).catch((err) => {
+      sessionsError = err.message;
+      return [];
+    });
+  }
+
   res.render('users/show', {
+    tab,
+    sessions,
+    sessionsError,
+    inr,
+    SESSION_STATUS,
+    FAULT_LABEL,
+    SETTLEMENT_LABEL,
     user,
     // `profile` kept for the existing template; client data wins for clients.
     profile: user.role === 'provider' ? providerProfile : clientProfile,
@@ -193,6 +214,9 @@ router.post('/:id/status', async (req, res) => {
     // provider_profiles.application_status.
     if (await delistIfListed(supabase, id, `Account ${status} by admin`)) {
       notes.push('Their provider listing was hidden — reinstate it from Providers if this is undone.');
+    }
+    if (await gendocs.delistIfListed(supabase, id, `Account ${status} by admin`)) {
+      notes.push("They were hidden as a general doctor and today's queue was cancelled — reinstate from General doctors if this is undone.");
     }
     // Staff lose dashboard access with their account.
     const { data: revoked } = await supabase

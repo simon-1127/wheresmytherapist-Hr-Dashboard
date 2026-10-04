@@ -1,0 +1,37 @@
+<%
+  const sn = snap && (snap.snapshot_meta || snap);
+  const body = snap && (snap.snapshot !== undefined ? snap.snapshot : snap);
+%>
+<div class="topbar">
+  <div>
+    <h1>Evidence snapshot</h1>
+    <div class="subtitle">
+      <% if (sn) { %>
+        <%= String(sn.kind || '').replace(/_/g, ' ') %> ·
+        <% if (sn.intact === true) { %><span class="badge badge-success">intact</span>
+        <% } else if (sn.intact === false) { %><span class="badge badge-danger">TAMPERED</span>
+        <% } else { %><span class="badge badge-neutral">unchecked</span><% } %>
+        · <%= fmtDT(sn.created_at) %>
+      <% } %>
+    </div>
+  </div>
+  <div class="pill-nav">
+    <% if (sn && sn.session_id) { %><a class="btn btn-secondary btn-sm" href="/sessions/<%= sn.session_id %>">Back to session</a><% } %>
+  </div>
+</div>
+
+<% if (error) { %><div class="flash flash-error">Could not load the snapshot: <%= error %></div><% } %>
+
+<% if (snap) { %>
+  <% if (sn.intact === false) { %>
+    <div class="flash flash-error">The stored snapshot no longer matches the hash recorded when it was taken. Don't rely on it — escalate to a super admin.</div>
+  <% } %>
+  <div class="card">
+    <dl class="kv">
+      <dt>SHA-256</dt><dd class="mono" style="word-break:break-all;"><%= sn.sha256 || '—' %></dd>
+      <% if (sn.computed_sha256 || sn.recomputed_sha256) { %><dt>Recomputed</dt><dd class="mono" style="word-break:break-all;"><%= sn.computed_sha256 || sn.recomputed_sha256 %></dd><% } %>
+      <dt>Snapshot id</dt><dd class="mono"><%= sn.id %></dd>
+    </dl>
+    <pre class="mono" style="margin-top:14px; max-height:70vh; overflow:auto; background:var(--surface-muted); padding:12px; border-radius:8px; white-space:pre-wrap; word-break:break-word;"><%= JSON.stringify(body, null, 2) %></pre>
+  </div>
+<% } %>

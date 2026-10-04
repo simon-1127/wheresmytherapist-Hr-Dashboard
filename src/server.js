@@ -22,6 +22,7 @@ const hrPortalRoutes = require('./routes/hrPortal.routes');
 const notificationsRoutes = require('./routes/notifications.routes');
 const supportRoutes = require('./routes/support.routes');
 const teamRoutes = require('./routes/team.routes');
+const sessionsRoutes = require('./routes/sessions.routes');
 
 const { verifyMailer } = require('./config/mailer');
 const { safeUrl } = require('./lib/validate');
@@ -103,6 +104,11 @@ app.use((req, res, next) => {
   next();
 });
 app.locals.safeUrl = safeUrl;
+// Date helpers for views (process TZ is Asia/Kolkata, see top of file).
+app.locals.fmtDT = (v) =>
+  v ? new Date(v).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : '—';
+app.locals.fmtTime = (v) =>
+  v ? new Date(v).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : '—';
 
 // EJS reinterprets a fixed set of render locals as *compiler options* rather
 // than template data (see _OPTS_PASSABLE_WITH_DATA in ejs/lib/ejs.js). The
@@ -171,6 +177,7 @@ app.use('/settings', settingsRoutes);
 app.use('/hr', hrPortalRoutes);
 app.use('/support', supportRoutes);
 app.use('/team', teamRoutes);
+app.use('/sessions', sessionsRoutes);
 // The old Onboarding tab. Provider creation/upgrade lived here and is gone;
 // team members moved to /team.
 app.use('/onboarding', (req, res) => res.redirect(301, '/team'));
@@ -181,6 +188,7 @@ app.use('/onboarding', (req, res) => res.redirect(301, '/team'));
 function errorExit(req) {
   if (req.path.startsWith('/support')) return { backHref: '/support/alerts', backLabel: 'Back to alerts' };
   if (req.path.startsWith('/hr')) return { backHref: '/hr', backLabel: 'Back to HR portal' };
+  if (req.path.startsWith('/sessions')) return { backHref: '/sessions', backLabel: 'Back to sessions' };
   return { backHref: '/', backLabel: 'Back to dashboard' };
 }
 

@@ -24,6 +24,8 @@ router.get('/', requireSuperAdmin, async (req, res) => {
     { data: activeAssignments },
     { data: orgs },
     { data: recentAudit },
+    { count: sessionsToReview },
+    { count: failedRefunds },
   ] = await Promise.all([
     supabase.from('organizations').select('id', { count: 'exact', head: true }),
     supabase.from('organization_employees').select('id', { count: 'exact', head: true }),
@@ -60,6 +62,8 @@ router.get('/', requireSuperAdmin, async (req, res) => {
       .select('id, action, target_table, created_at, details')
       .order('created_at', { ascending: false })
       .limit(6),
+    supabase.from('sessions').select('id', { count: 'exact', head: true }).eq('needs_review', true),
+    supabase.from('refunds').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
   ]);
 
   const assignedGendocIds = new Set((activeAssignments || []).map((a) => a.gendoc_id));
@@ -82,6 +86,8 @@ router.get('/', requireSuperAdmin, async (req, res) => {
   // Ordered by urgency. Only non-zero items render.
   const attention = [
     { n: openAlerts || 0, label: 'new crisis alert(s) not yet acknowledged', href: '/support/alerts', urgent: true },
+    { n: failedRefunds || 0, label: 'refund(s) failed at Razorpay — retry needed', href: '/sessions/refunds?status=failed', urgent: true },
+    { n: sessionsToReview || 0, label: 'session(s) flagged for review', href: '/sessions/review' },
     { n: pendingProviders || 0, label: 'provider profile(s) waiting for review', href: '/providers?tab=review' },
     { n: providersNoProfile, label: 'provider signup(s) with no profile yet', href: '/providers?tab=incomplete' },
     { n: unassignedGendocs, label: 'approved doctor(s) not assigned to any organization', href: '/gendocs' },

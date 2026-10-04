@@ -80,31 +80,72 @@ async function requireHrContact(req, res, next) {
   next();
 }
 
+// Staff session = the /support/login session. It can belong to a
+// support_agent or a finance member; older cookies have no roleType and
+// are support agents.
+function staffRoleOf(s) {
+  return s && s.supportAgent ? s.supportAgent.roleType || 'support_agent' : null;
+}
+
+async function revalidateStaff(req) {
+  const s = req.session || {};
+  if (s.superAdmin && due(s.superAdmin)) {
+    const ok = await hasRole(s.superAdmin.id, 'super_admin');
+    if (ok === false) return false;
+    if (ok) s.superAdmin.checkedAt = Date.now();
+  }
+  if (s.supportAgent && !s.superAdmin && due(s.supportAgent)) {
+    const ok = await hasRole(s.supportAgent.id, staffRoleOf(s));
+    if (ok === false) return false;
+    if (ok) s.supportAgent.checkedAt = Date.now();
+  }
+  return true;
+}
+
+// Crisis/support console — support agents (and super admins) only.
 async function requireSupportAccess(req, res, next) {
   const s = req.session || {};
   if (!s.superAdmin && !s.supportAgent) return res.redirect('/support/login');
-
-  if (s.supportAgent && !s.superAdmin && due(s.supportAgent)) {
-    const ok = await hasRole(s.supportAgent.id, 'support_agent');
-    if (ok === false) {
-      req.session = null;
-      return res.redirect('/support/login');
-    }
-    if (ok) s.supportAgent.checkedAt = Date.now();
+  if (!(await revalidateStaff(req))) {
+    req.session = null;
+    return res.redirect('/support/login');
   }
-  if (s.superAdmin) {
-    // Reuse the super admin revalidation without its redirect target.
-    if (due(s.superAdmin)) {
-      const ok = await hasRole(s.superAdmin.id, 'super_admin');
-      if (ok === false) {
-        req.session = null;
-        return res.redirect('/support/login');
-      }
-      if (ok) s.superAdmin.checkedAt = Date.now();
-    }
+  if (!s.superAdmin && staffRoleOf(s) !== 'support_agent') {
+    // A finance login has no business in crisis alerts or client wellness
+    // data; send them to the part of the portal that is theirs.
+    return res.redirect('/sessions/refunds');
   }
   res.locals.currentSupportAgent = s.supportAgent || null;
+  res.locals.staffRole = s.superAdmin ? 'super_admin' : staffRoleOf(s);
   next();
 }
 
-module.exports = { requireSuperAdmin, requireHrContact, requireSupportAccess };
+/**
+ * Sessions & Refunds. Open to super admins (admin login) and to staff
+ * (support/finance login). Sets req.viewer = { id, email, role } — the id
+ * is what the backend receives as X-Admin-User-Id — and picks the layout
+ * that matches how the person logged in.
+ */
+async function requireStaff(req, res, next) {
+  const s = req.session || {};
+  if (!s.superAdmin && !s.supportAgent) return res.redirect('/support/login');
+  if (!(await revalidateStaff(req))) {
+    req.session = null;
+    return res.redirect('/support/login');
+  }
+  const role = s.superAdmin ? 'super_admin' : staffRoleOf(s);
+  const who = s.superAdmin || s.supportAgent;
+  req.viewer = { id: who.id, email: who.email, role };
+  res.locals.viewer = req.viewer;
+  res.locals.staffRole = role;
+  if (s.superAdmin) {
+    res.locals.currentSuperAdmin = s.superAdmin;
+    res.locals.layout = 'partials/adminLayout';
+  } else {
+    res.locals.agent = s.supportAgent;
+    res.locals.layout = 'partials/supportLayout';
+  }
+  next();
+}
+
+module.exports = { requireSuperAdmin, requireHrContact, requireSupportAccess, requireStaff };

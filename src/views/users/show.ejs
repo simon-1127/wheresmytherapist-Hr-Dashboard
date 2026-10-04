@@ -29,6 +29,41 @@
   </div>
 </div>
 
+<div class="tabs">
+  <a class="tab <%= tab === 'overview' ? 'active' : '' %>" href="/users/<%= user.id %>">Overview</a>
+  <a class="tab <%= tab === 'sessions' ? 'active' : '' %>" href="/users/<%= user.id %>?tab=sessions">Sessions</a>
+</div>
+
+<% if (tab === 'sessions') { %>
+<div class="card">
+  <div class="card-header">
+    <h2>Sessions</h2>
+    <a class="small" href="/sessions?user=<%= user.id %>">Open in session search →</a>
+  </div>
+  <% if (sessionsError) { %>
+    <div class="flash flash-error">Could not load sessions: <%= sessionsError %></div>
+  <% } else if (!sessions.length) { %>
+    <div class="empty-state small">No sessions as a client or a provider.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Session</th><th>As</th><th>Scheduled</th><th>With</th><th>Status</th><th>Amount</th><th>Provider share</th></tr></thead>
+      <tbody>
+        <% sessions.forEach(r => { const asClient = r.client_id === user.id; %>
+          <tr class="table-link-row" onclick="location.href='/sessions/<%= r.id %>'">
+            <td><a class="mono" href="/sessions/<%= r.id %>"><%= r.id.slice(0, 8) %></a><% if (r.needs_review) { %> <span class="badge badge-warn">review</span><% } %></td>
+            <td class="small"><%= asClient ? 'client' : 'provider' %></td>
+            <td class="small"><%= fmtDT(r.scheduled_start) %></td>
+            <td class="small"><%= asClient ? r.provider_name : r.client_name %></td>
+            <td class="small"><%= SESSION_STATUS[r.status] || r.status %><% if (r.fault) { %><div class="muted"><%= FAULT_LABEL[r.fault] || r.fault %></div><% } %></td>
+            <td class="money small"><%= inr(r.amount) %><% if (r.refunded_amount) { %><div class="muted">−<%= inr(r.refunded_amount) %> refunded</div><% } %></td>
+            <td class="small"><%= r.settlement_status ? (SETTLEMENT_LABEL[r.settlement_status] || r.settlement_status) : '—' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+<% } else { %>
 <div class="grid grid-2col">
   <div class="card">
     <div class="card-header"><h2>Profile</h2></div>
@@ -109,7 +144,7 @@
   </div>
 
   <div class="card">
-    <div class="card-header"><h2>Session history</h2></div>
+    <div class="card-header"><h2>Session history</h2><a class="small" href="/users/<%= user.id %>?tab=sessions">Evidence &amp; refunds →</a></div>
     <% if (!sessionHistory.length) { %>
       <div class="empty-state small">No sessions on record.</div>
     <% } else { %>
@@ -118,7 +153,7 @@
         <tbody>
           <% sessionHistory.forEach(s => { %>
             <tr>
-              <td class="small muted"><%= new Date(s.scheduled_start).toLocaleString('en-IN') %></td>
+              <td class="small muted"><a href="/sessions/<%= s.id %>"><%= new Date(s.scheduled_start).toLocaleString('en-IN') %></a></td>
               <td><span class="badge badge-info"><%= s.status %></span></td>
             </tr>
           <% }) %>
@@ -127,3 +162,4 @@
     <% } %>
   </div>
 </div>
+<% } %>

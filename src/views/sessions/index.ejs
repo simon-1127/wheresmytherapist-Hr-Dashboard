@@ -1,0 +1,63 @@
+<div class="topbar">
+  <div>
+    <h1>Sessions</h1>
+    <div class="subtitle"><% if (userLabel) { %>Sessions for <strong><%= userLabel %></strong> · <a href="/sessions">clear</a><% } else { %>Search by session id (or its first 8 characters), or a client or provider name or email.<% } %></div>
+  </div>
+  <div class="pill-nav">
+    <a class="btn btn-secondary btn-sm" href="/sessions/review">Review queue</a>
+    <a class="btn btn-secondary btn-sm" href="/sessions/refunds">Refunds</a>
+  </div>
+</div>
+
+<div class="card">
+  <form method="GET" action="/sessions" style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+    <% if (f.user) { %><input type="hidden" name="user" value="<%= f.user %>" /><% } %>
+    <div class="field" style="margin:0; flex:1; min-width:240px;">
+      <label class="small" for="sq">Search</label>
+      <input id="sq" type="text" name="q" value="<%= f.q %>" placeholder="Session id, name or email" autofocus />
+    </div>
+    <div class="field" style="margin:0;">
+      <label class="small" for="sstatus">Status</label>
+      <select id="sstatus" name="status">
+        <option value="">Any</option>
+        <% Object.entries(P.SESSION_STATUS).forEach(([k, v]) => { %><option value="<%= k %>" <%= f.status === k ? 'selected' : '' %>><%= v %></option><% }) %>
+      </select>
+    </div>
+    <div class="field" style="margin:0;">
+      <label class="small" for="sfrom">From</label>
+      <input id="sfrom" type="date" name="from" value="<%= f.from %>" />
+    </div>
+    <div class="field" style="margin:0;">
+      <label class="small" for="sto">To</label>
+      <input id="sto" type="date" name="to" value="<%= f.to %>" />
+    </div>
+    <button class="btn btn-primary btn-sm" type="submit">Search</button>
+    <% if (searched) { %><a class="btn btn-secondary btn-sm" href="/sessions">Clear</a><% } %>
+  </form>
+
+  <% if (!searched) { %><div class="small muted" style="margin-bottom:8px;">Most recent 30 sessions:</div><% } %>
+  <% if (!rows.length) { %>
+    <div class="empty-state">No sessions match.</div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Session</th><th>Scheduled</th><th>Client</th><th>Provider</th><th>Status</th><th>Amount</th><th>Provider share</th></tr></thead>
+      <tbody>
+        <% rows.forEach(r => { %>
+          <tr class="table-link-row" onclick="location.href='/sessions/<%= r.id %>'">
+            <td><a class="mono" href="/sessions/<%= r.id %>"><%= r.id.slice(0, 8) %></a><% if (r.needs_review) { %> <span class="badge badge-warn" title="<%= r.review_reason || '' %>">review</span><% } %></td>
+            <td class="small"><%= fmtDT(r.scheduled_start) %></td>
+            <td class="small"><%= r.client_name %><div class="muted"><%= r.client_email %></div></td>
+            <td class="small"><%= r.provider_name %><div class="muted"><%= r.provider_email %></div></td>
+            <td>
+              <span class="badge <%= r.status === 'completed' ? 'badge-success' : /no_show|interrupted|disputed|cancelled_by_provider/.test(r.status) ? 'badge-danger' : 'badge-neutral' %>"><%= P.SESSION_STATUS[r.status] || r.status %></span>
+              <% if (r.fault) { %><div class="small muted"><%= P.FAULT_LABEL[r.fault] || r.fault %></div><% } %>
+            </td>
+            <td class="money small"><%= inr(r.amount) %><% if (r.refunded_amount) { %><div class="muted">−<%= inr(r.refunded_amount) %> refunded</div><% } %></td>
+            <td class="small"><%= r.settlement_status ? (P.SETTLEMENT_LABEL[r.settlement_status] || r.settlement_status) : '—' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% if (rows.length >= 100) { %><p class="small muted">Showing the first 100 — narrow the search.</p><% } %>
+  <% } %>
+</div>

@@ -9,11 +9,13 @@ const { uuidParams, normalizeEmail, isEmail, escapeHtml, dashboardUrl } = requir
 // created providers and upgraded clients into providers. Providers now sign
 // up on the website and are only approved, under /providers.)
 //
-// Only support_agent is offered: it is the only staff role that has a
-// portal to log in to (/support). content_moderator and finance exist in
-// the enum, but an account with either could not sign in anywhere — the
-// support login checks for support_agent specifically.
-const ASSIGNABLE_ROLES = ['support_agent'];
+// support_agent -> the /support console (crisis, wellness) + Sessions view
+//                  and outcome changes.
+// finance       -> Sessions & Refunds only (refunds, settlements).
+// Both sign in at /support/login. content_moderator still has no portal and
+// isn't offered.
+const ASSIGNABLE_ROLES = ['support_agent', 'finance'];
+const ROLE_LABEL = { support_agent: 'support agent', finance: 'finance' };
 const STAFF_ROLES = ['support_agent', 'content_moderator', 'finance'];
 
 const router = express.Router();
@@ -148,7 +150,7 @@ router.post('/members', async (req, res) => {
     to: email,
     subject: "Team access — Where's My Therapist",
     html: `<p>Hi ${escapeHtml(fullName)},</p>
-      <p>You now have support-team access to Where's My Therapist.</p>
+      <p>You now have ${ROLE_LABEL[roleType]} access to the Where's My Therapist team portal.</p>
       <p>Login email: <strong>${escapeHtml(email)}</strong><br/>
       Sign in at <a href="${dashboardUrl()}/support/login">${dashboardUrl()}/support/login</a>.
       ${reusedAccount && !password ? 'Use the password you already have for this email.' : 'Your admin will share your password with you directly.'}</p>`,
@@ -157,8 +159,8 @@ router.post('/members', async (req, res) => {
   req.setFlash({
     type: 'success',
     message: reusedAccount
-      ? `${email} already had an account — support access granted.${password ? ' Password updated.' : ' They keep their existing password.'}`
-      : `${fullName} added as support agent.`,
+      ? `${email} already had an account — ${ROLE_LABEL[roleType]} access granted.${password ? ' Password updated.' : ' They keep their existing password.'}`
+      : `${fullName} added as ${ROLE_LABEL[roleType]}.`,
   });
   res.redirect('/team');
 });
@@ -199,7 +201,7 @@ router.post('/:userId/password', async (req, res) => {
   }
   const { data: role } = await supabase.from('admin_roles').select('role_type').eq('user_id', userId).maybeSingle();
   if (!role || role.role_type === 'super_admin') {
-    req.setFlash({ type: 'error', message: 'Only support-team passwords can be reset here.' });
+    req.setFlash({ type: 'error', message: 'Only team (support/finance) passwords can be reset here.' });
     return res.redirect('/team');
   }
   const { error } = await supabase.auth.admin.updateUserById(userId, { password });

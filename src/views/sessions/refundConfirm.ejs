@@ -1,0 +1,31 @@
+<div class="topbar">
+  <div>
+    <h1>Confirm refund</h1>
+    <div class="subtitle">Session <a class="mono" href="/sessions/<%= id %>"><%= id.slice(0, 8) %></a></div>
+  </div>
+</div>
+
+<div class="card" style="max-width:640px;">
+  <div class="small muted">You are about to refund</div>
+  <div class="confirm-amount money"><%= inr(amount) %></div>
+  <div class="small muted"><%= full ? 'Full refund' : 'Partial refund' %> · <%= inr(refundable) %> was refundable<% if (!full) { %> · <%= inr(refundable - amount) %> will remain refundable<% } %></div>
+
+  <dl class="kv" style="margin-top:16px;">
+    <dt>Client</dt><dd><%= people.client ? (people.client.full_name || people.client.email) + ' · ' + people.client.email : '—' %></dd>
+    <dt>Provider</dt><dd><%= people.provider ? (people.provider.full_name || people.provider.email) : '—' %></dd>
+    <dt>Session</dt><dd><%= fmtDT(session.scheduled_start) %> · <%= P.SESSION_STATUS[session.status] || session.status || '—' %></dd>
+    <dt>Reason</dt><dd><%= P.REFUND_REASON_LABEL[reason] %></dd>
+    <dt>Note</dt><dd><%= note %></dd>
+    <dt>Provider liable</dt>
+    <dd><%= providerLiable ? "Yes — recovered from the provider's share" : 'No — absorbed by WMT' %></dd>
+  </dl>
+
+  <p class="small muted">The money goes back to the client's original payment method through Razorpay. This can't be undone from here.</p>
+
+  <form method="POST" action="/sessions/<%= id %>/refund" style="display:flex; gap:8px; margin-top:12px;" onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+    <input type="hidden" name="token" value="<%= token %>" />
+    <button class="btn btn-danger" type="submit">Refund <%= inr(amount) %></button>
+    <a class="btn btn-secondary" href="/sessions/<%= id %>#refund">Cancel</a>
+  </form>
+  <p class="small muted" style="margin-bottom:0;">This confirmation expires in 10 minutes and can only be submitted once.</p>
+</div>
