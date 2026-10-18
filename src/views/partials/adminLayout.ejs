@@ -36,6 +36,12 @@
         <a class="nav-link nav-sub <%= path.startsWith('/sessions/review') ? 'active' : '' %>" href="/sessions/review">Review queue</a>
         <a class="nav-link nav-sub <%= path.startsWith('/sessions/refunds') ? 'active' : '' %>" href="/sessions/refunds">Refunds</a>
       <% } %>
+      <a class="nav-link <%= path.startsWith('/early-access') ? 'active' : '' %>" href="/early-access/physiotherapy">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px; vertical-align:-3px;"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 14.4l-4.8 2.5.9-5.4L4.2 7.7l5.4-.8z"/><path d="M5 21h14"/></svg>Early access
+      </a>
+      <% if (path.startsWith('/early-access')) { %>
+        <a class="nav-link nav-sub <%= path.startsWith('/early-access/physiotherapy') ? 'active' : '' %>" href="/early-access/physiotherapy">Home physiotherapy</a>
+      <% } %>
       <a class="nav-link <%= path.startsWith('/team') ? 'active' : '' %>" href="/team">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px; vertical-align:-3px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="17" y1="11" x2="23" y2="11"/></svg>Team
       </a>

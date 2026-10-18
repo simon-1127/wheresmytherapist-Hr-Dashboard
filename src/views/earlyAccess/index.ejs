@@ -1,0 +1,126 @@
+<% const qs = (extra) => { const p = new URLSearchParams(Object.assign({}, filters, extra)); [...p.keys()].forEach(k => { if (!p.get(k)) p.delete(k); }); return p.toString(); }; %>
+<div class="topbar">
+  <div>
+    <h1>Early access · <%= feature.title %></h1>
+    <div class="subtitle"><%= feature.blurb %> Oldest first — work the queue top-down.</div>
+  </div>
+  <a class="btn btn-secondary btn-sm" href="/early-access/<%= feature.key %>/export.csv?<%= qs({}) %>">Export CSV</a>
+</div>
+
+<div class="grid grid-stats" style="margin-bottom: 20px;">
+  <div class="stat-card">
+    <div class="stat-label">On the waitlist</div>
+    <div class="stat-value"><%= stats.total %></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Open in queue</div>
+    <div class="stat-value"><%= stats.open %></div>
+    <div class="stat-foot <%= counts.new ? 'warn' : '' %>"><%= counts.new %> not contacted yet</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">OK with ₹1,000</div>
+    <div class="stat-value"><%= stats.priceYes %></div>
+    <div class="stat-foot"><%= stats.total ? Math.round(stats.priceYes * 100 / stats.total) : 0 %>% of all</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Want it within a month</div>
+    <div class="stat-value"><%= stats.soon %></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <a class="tab <%= filters.status === 'open' ? 'active' : '' %>" href="?<%= qs({ status: 'open' }) %>">Open <span class="tab-count"><%= counts.open %></span></a>
+  <% E.STATUSES.forEach(s => { %>
+    <a class="tab <%= filters.status === s.value ? 'active' : '' %>" href="?<%= qs({ status: s.value }) %>"><%= s.label %> <span class="tab-count"><%= counts[s.value] || 0 %></span></a>
+  <% }) %>
+  <a class="tab <%= filters.status === 'all' ? 'active' : '' %>" href="?<%= qs({ status: 'all' }) %>">All <span class="tab-count"><%= counts.all %></span></a>
+</div>
+
+<div class="card">
+  <form method="GET" action="/early-access/<%= feature.key %>" style="margin-bottom:16px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+    <input type="hidden" name="status" value="<%= filters.status %>" />
+    <input type="text" name="q" placeholder="Search name, contact, city, state…" value="<%= filters.q %>" style="max-width:260px;" />
+    <% Object.keys(feature.options).forEach(col => { const f = feature.fields.find(x => x.col === col); %>
+      <select name="<%= col %>" style="max-width:210px;" aria-label="<%= f.label %>">
+        <option value=""><%= f.label %>: any</option>
+        <% feature.options[col].forEach(o => { %><option value="<%= o.value %>" <%= filters[col] === o.value ? 'selected' : '' %>><%= o.label %></option><% }) %>
+      </select>
+    <% }) %>
+    <button class="btn btn-secondary btn-sm" type="submit">Filter</button>
+    <% if (filters.q || Object.keys(feature.options).some(c => filters[c])) { %><a class="small" href="?status=<%= filters.status %>">Clear</a><% } %>
+  </form>
+
+  <% if (!rows.length) { %>
+    <div class="empty-state"><%= stats.total ? 'Nobody matches these filters.' : 'No one has joined the waitlist yet.' %></div>
+  <% } else { %>
+    <table>
+      <thead><tr><th>#</th><th>Customer</th><th>Location</th><th>Who / support</th><th>When</th><th>₹1,000?</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <% rows.forEach((r, i) => { %>
+          <tr>
+            <td class="small muted"><%= i + 1 %></td>
+            <td>
+              <a href="/early-access/<%= feature.key %>/<%= r.id %>"><strong><%= r.name %></strong></a>
+              <div class="small muted"><%= r.contact %> · joined <%= fmtDT(r.created_at) %><% if (!r.user_id) { %> · <span class="badge badge-neutral">No account</span><% } %></div>
+            </td>
+            <td class="small"><%= r.city %>, <%= r.state %></td>
+            <td class="small"><%= E.labelOf(feature, 'for_whom', r.for_whom) %><div class="muted"><%= E.labelOf(feature, 'support', r.support) %></div></td>
+            <td class="small"><%= E.labelOf(feature, 'timing', r.timing) %></td>
+            <td class="small">
+              <span class="badge <%= r.price_fit === 'yes' ? 'badge-success' : r.price_fit === 'no' ? 'badge-danger' : 'badge-neutral' %>"><%= { yes: 'Yes', maybe: 'Maybe', no: 'No', more_info: 'More info' }[r.price_fit] || r.price_fit %></span>
+            </td>
+            <td><span class="badge <%= E.STATUS_BADGE[r.status] || 'badge-neutral' %>"><%= E.labelOf(feature, 'status', r.status) %></span></td>
+            <td><a class="btn btn-secondary btn-sm" href="/early-access/<%= feature.key %>/<%= r.id %>">Open</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% if (rows.length >= 500) { %><p class="small muted">Showing the first 500. Narrow the filters or export CSV for everything.</p><% } %>
+  <% } %>
+</div>
+
+<div class="grid grid-2col" style="margin-top:16px;">
+  <div class="card">
+    <h3 style="margin-top:0;">Demand by city</h3>
+    <% if (!topCities.length) { %>
+      <div class="empty-state">No responses yet.</div>
+    <% } else { %>
+      <table>
+        <thead><tr><th>City</th><th>State</th><th>People</th><th>OK with ₹1,000</th></tr></thead>
+        <tbody>
+          <% topCities.forEach(c => { %>
+            <tr>
+              <td><a href="?<%= qs({ q: c.city, status: 'all' }) %>"><%= c.city %></a></td>
+              <td class="small muted"><%= c.state %></td>
+              <td><%= c.total %></td>
+              <td class="small"><%= c.priceYes %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <p class="small muted">Top 10, grouped by city + state as typed (case-insensitive).</p>
+    <% } %>
+  </div>
+
+  <details class="card" open>
+    <summary style="cursor:pointer; font-weight:600;">What we store (<code><%= feature.table %></code>)</summary>
+    <p class="small muted">One row per account. Customer answers are read-only here; the team columns are what this page edits.</p>
+    <table>
+      <thead><tr><th>Column</th><th>Shown as</th><th>Source</th></tr></thead>
+      <tbody>
+        <% feature.fields.forEach(f => { %>
+          <tr>
+            <td class="small"><code><%= f.col %></code></td>
+            <td class="small">
+              <%= f.label %>
+              <% if (f.option) { %><div class="muted">One of: <%= feature.options[f.col].map(o => o.label).join(' · ') %></div><% } %>
+              <% if (f.col === 'status') { %><div class="muted">One of: <%= E.STATUSES.map(o => o.label).join(' · ') %></div><% } %>
+              <% if (f.note) { %><div class="muted"><%= f.note %></div><% } %>
+            </td>
+            <td><span class="badge <%= f.from === 'customer' ? 'badge-info' : f.from === 'team' ? 'badge-warn' : 'badge-neutral' %>"><%= f.from %></span></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </details>
+</div>

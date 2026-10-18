@@ -23,6 +23,7 @@ const notificationsRoutes = require('./routes/notifications.routes');
 const supportRoutes = require('./routes/support.routes');
 const teamRoutes = require('./routes/team.routes');
 const sessionsRoutes = require('./routes/sessions.routes');
+const earlyAccessRoutes = require('./routes/earlyAccess.routes');
 
 const { verifyMailer } = require('./config/mailer');
 const { safeUrl } = require('./lib/validate');
@@ -178,6 +179,7 @@ app.use('/hr', hrPortalRoutes);
 app.use('/support', supportRoutes);
 app.use('/team', teamRoutes);
 app.use('/sessions', sessionsRoutes);
+app.use('/early-access', earlyAccessRoutes);
 // The old Onboarding tab. Provider creation/upgrade lived here and is gone;
 // team members moved to /team.
 app.use('/onboarding', (req, res) => res.redirect(301, '/team'));

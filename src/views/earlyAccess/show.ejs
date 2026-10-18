@@ -1,0 +1,59 @@
+<div class="topbar">
+  <div>
+    <h1><%= entry.name %></h1>
+    <div class="subtitle"><%= feature.title %> waitlist · <%= entry.city %>, <%= entry.state %> · joined <%= fmtDT(entry.created_at) %></div>
+  </div>
+  <a class="btn btn-secondary btn-sm" href="/early-access/<%= feature.key %>">Back to queue</a>
+</div>
+
+<div class="grid grid-2col">
+  <div class="card">
+    <h3 style="margin-top:0;">What they told us</h3>
+    <dl class="kv">
+      <% feature.fields.filter(f => f.from !== 'team').forEach(f => { %>
+        <dt><%= f.label %></dt>
+        <dd>
+          <% if (f.col === 'user_id') { %>
+            <% if (account) { %>
+              <a href="/users/<%= account.id %>"><%= account.email || account.id %></a>
+              <span class="small muted"><%= account.role %><%= account.phone ? ' · ' + account.phone : '' %><%= account.status !== 'active' ? ' · ' + account.status : '' %></span>
+            <% } else if (!entry.user_id) { %><span class="badge badge-neutral">No account</span> <span class="small muted">Joined without signing in. It links automatically if they sign up with this email.</span>
+            <% } else { %><span class="muted">Account not found (<%= entry.user_id %>)</span><% } %>
+          <% } else if (f.option) { %>
+            <%= E.labelOf(feature, f.col, entry[f.col]) %>
+          <% } else if (f.date) { %>
+            <%= fmtDT(entry[f.col]) %>
+          <% } else if (f.col === 'note') { %>
+            <% if (entry.note) { %><div style="white-space:pre-wrap;"><%= entry.note %></div><% } else { %><span class="muted">—</span><% } %>
+          <% } else { %>
+            <%= entry[f.col] || '—' %>
+          <% } %>
+        </dd>
+      <% }) %>
+    </dl>
+    <p class="small muted" style="margin-bottom:0;">Read-only: customers change these themselves on the website.</p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Follow-up</h3>
+    <p>
+      <span class="badge <%= E.STATUS_BADGE[entry.status] || 'badge-neutral' %>"><%= E.labelOf(feature, 'status', entry.status) %></span>
+      <% if (entry.contacted_at) { %><span class="small muted">First contacted <%= fmtDT(entry.contacted_at) %></span><% } %>
+    </p>
+    <% if (handler) { %><p class="small muted">Last changed by <%= handler.email %></p><% } %>
+    <form method="POST" action="/early-access/<%= feature.key %>/<%= entry.id %>">
+      <div class="field">
+        <label for="ea_status">Status</label>
+        <select id="ea_status" name="status">
+          <% E.STATUSES.forEach(s => { %><option value="<%= s.value %>" <%= entry.status === s.value ? 'selected' : '' %>><%= s.label %></option><% }) %>
+        </select>
+      </div>
+      <div class="field">
+        <label for="ea_note">Team note (internal)</label>
+        <textarea id="ea_note" name="staff_note" rows="5" maxlength="2000" placeholder="e.g. Called 18 Oct, interested once we launch in Indore."><%= entry.staff_note || '' %></textarea>
+      </div>
+      <button class="btn btn-primary" type="submit">Save follow-up</button>
+    </form>
+    <p class="small muted">Only contact them about this waitlist — that's what they consented to on <%= fmtDT(entry.contact_consent_at) %>.</p>
+  </div>
+</div>
