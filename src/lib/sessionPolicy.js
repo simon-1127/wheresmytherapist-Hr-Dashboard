@@ -7,7 +7,7 @@
 // support_agent = view + outcome changes. The backend enforces the same
 // rules — this only decides what the UI offers.
 const PERMISSIONS = {
-  super_admin: ['view', 'outcome', 'refund', 'settlement', 'retry'],
+  super_admin: ['view', 'outcome', 'refund', 'settlement', 'retry', 'cancel', 'reschedule', 'complete'],
   finance: ['view', 'refund', 'settlement', 'retry'],
   support_agent: ['view', 'outcome'],
 };
@@ -100,7 +100,34 @@ const SOURCE_LABEL = {
 const PROVIDER_LIABLE_HELP =
   "Tick when the provider caused this (no-show, late, cancelled). The refund is then recovered from the provider's 78% share for this session instead of being absorbed by WMT. Leave unticked for platform, staff, support or goodwill refunds.";
 
+/** Reasons a super admin can cancel a session for (backend CANCEL_REASONS). */
+const CANCEL_REASONS = [
+  { value: 'client_request', label: 'Client asked to cancel' },
+  { value: 'provider_request', label: 'Therapist asked to cancel' },
+  { value: 'provider_fault', label: 'Therapist unable to hold it (their fault)' },
+  { value: 'tech_failure', label: 'Technical problem on our side' },
+  { value: 'safety_concern', label: 'Safety concern' },
+  { value: 'other', label: 'Other' },
+];
+
+/** Which super-admin controls make sense for a session right now. */
+function controlsFor(s) {
+  const status = s.status;
+  const started = s.scheduled_start && new Date(s.scheduled_start).getTime() <= Date.now();
+  const live = ['confirmed', 'in_progress'].includes(status);
+  const missed = ['no_show_client', 'no_show_provider', 'no_show_both', 'interrupted', 'cancelled_by_provider'].includes(status);
+  const rebookOpen = missed && s.reschedule_state === 'required';
+  return {
+    cancel: live || rebookOpen,
+    reschedule: (status === 'confirmed' || (status === 'in_progress' && !started)) || rebookOpen,
+    rescheduleIsRebook: rebookOpen,
+    complete: ((live && started) || missed) && s.reschedule_state !== 'done',
+  };
+}
+
 module.exports = {
+  CANCEL_REASONS,
+  controlsFor,
   can,
   inr,
   rupeesToPaise,

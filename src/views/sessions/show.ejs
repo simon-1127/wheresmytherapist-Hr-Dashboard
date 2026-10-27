@@ -282,6 +282,71 @@
   <% } %>
 </div>
 
+<% if ((can('cancel') && controls.cancel) || (can('reschedule') && controls.reschedule) || (can('complete') && controls.complete)) { %>
+<div class="card" id="controls" style="margin-top:16px;">
+  <div class="card-header"><h2>Session controls</h2><span class="small muted">Super admin. Both people are told in the app and by email, with how to reach support.</span></div>
+
+  <% if (can('reschedule') && controls.reschedule) { %>
+    <div class="action-panel">
+      <h3><%= controls.rescheduleIsRebook ? 'Rebook this missed session' : 'Reschedule' %></h3>
+      <p class="small muted" style="margin-top:0;">
+        <%= controls.rescheduleIsRebook
+          ? 'Creates a new booking with the same therapist at the new time, paid by the credit from this one. This session becomes "rescheduled" and the therapist’s share moves to the new one.'
+          : 'Same booking, new time, same therapist. Nothing changes money-wise; the old slot is freed.' %>
+        Sessions are 60 minutes. The therapist doesn’t need an open slot at that time, but must not be booked.
+      </p>
+      <form method="POST" action="/sessions/<%= id %>/reschedule" onsubmit="return confirm('Move this session to the new time and notify both people?');">
+        <div class="grid grid-2col">
+          <div class="field"><label for="rs_at">New start (IST)</label><input type="datetime-local" id="rs_at" name="start_at" required step="900" /></div>
+          <div class="field"><label for="rs_msg">Message to both (optional)</label><input type="text" id="rs_msg" name="message" maxlength="500" placeholder="e.g. The therapist asked for a later time." /></div>
+        </div>
+        <button class="btn btn-primary" type="submit"><%= controls.rescheduleIsRebook ? 'Rebook' : 'Reschedule' %></button>
+      </form>
+    </div>
+  <% } %>
+
+  <% if (can('complete') && controls.complete) { %>
+    <div class="action-panel">
+      <h3>Mark as finished</h3>
+      <p class="small muted" style="margin-top:0;">Records the session as delivered — e.g. it happened but attendance wasn’t captured, or it was wrongly closed as a no-show. Closes any open reschedule.</p>
+      <form method="POST" action="/sessions/<%= id %>/complete" onsubmit="return confirm('Record this session as completed and notify both people?');">
+        <div class="grid grid-2col">
+          <div class="field"><label for="cp_note">Why (internal, audit log)</label><input type="text" id="cp_note" name="note" required minlength="5" maxlength="1000" placeholder="e.g. Both were in the call; attendance not captured." /></div>
+          <div class="field"><label for="cp_msg">Message to both (optional)</label><input type="text" id="cp_msg" name="message" maxlength="500" /></div>
+        </div>
+        <label class="small" style="display:flex; gap:8px; align-items:center; margin-bottom:12px;"><input type="checkbox" name="pay_provider" checked style="width:auto;" /> Release the therapist’s share for payout (untick to hold it for review)</label>
+        <button class="btn btn-primary" type="submit">Mark as finished</button>
+      </form>
+    </div>
+  <% } %>
+
+  <% if (can('cancel') && controls.cancel) { %>
+    <div class="action-panel">
+      <h3>Cancel session</h3>
+      <p class="small muted" style="margin-top:0;">Ends the booking (and a live call). The client is told why in general terms and where to ask for details — support email and WhatsApp with the booking reference.</p>
+      <form method="POST" action="/sessions/<%= id %>/cancel" onsubmit="return confirm('Cancel this session and notify both people? This cannot be undone.');">
+        <div class="grid grid-2col">
+          <div class="field">
+            <label for="cx_reason">Reason</label>
+            <select id="cx_reason" name="reason" required>
+              <option value="">Choose…</option>
+              <% cancelReasons.forEach(r => { %><option value="<%= r.value %>"><%= r.label %></option><% }) %>
+            </select>
+          </div>
+          <div class="field"><label for="cx_msg">Message to both (optional)</label><input type="text" id="cx_msg" name="message" maxlength="500" placeholder="Shown to the client and the therapist." /></div>
+        </div>
+        <div class="field">
+          <label>Client’s payment</label>
+          <label class="small" style="display:flex; gap:8px; align-items:center;"><input type="radio" name="money" value="credit" checked style="width:auto;" /> Keep as credit — the client rebooks free (any therapist)</label>
+          <label class="small" style="display:flex; gap:8px; align-items:center;"><input type="radio" name="money" value="refund" style="width:auto;" /> Full refund to the original payment method (5–7 working days)</label>
+        </div>
+        <button class="btn btn-danger" type="submit">Cancel session</button>
+      </form>
+    </div>
+  <% } %>
+</div>
+<% } %>
+
 <% if (can('refund') || can('outcome') || can('settlement')) { %>
 <div class="card" style="margin-top:16px;">
   <div class="card-header"><h2>Actions</h2><span class="small muted">Every action is audited with your name.</span></div>

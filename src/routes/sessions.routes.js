@@ -232,6 +232,8 @@ router.get('/:id', async (req, res) => {
     audit,
     actors,
     roleOf: (uid) => (uid && uid === clientId ? 'client' : uid && uid === providerId ? 'provider' : null),
+    controls: P.controlsFor(session),
+    cancelReasons: P.CANCEL_REASONS,
   });
 });
 
@@ -385,6 +387,80 @@ router.post('/:id/outcome', requirePerm('outcome'), async (req, res) => {
     r.ok
       ? { type: 'success', message: `Outcome set to "${P.FAULT_LABEL[fault]}".` }
       : { type: 'error', message: `Outcome not changed: ${r.message}` },
+  );
+  res.redirect(back);
+});
+
+// ------------------------------------------------- super-admin controls ---
+// Cancel / reschedule / mark finished. The backend owns the money and the
+// messages to both people; these only validate the form and report back.
+
+const clip = (v, n) => String(v || '').trim().slice(0, n);
+
+router.post('/:id/cancel', requirePerm('cancel'), async (req, res) => {
+  const { id } = req.params;
+  const back = `/sessions/${id}#controls`;
+  const reason = req.body.reason;
+  if (!P.CANCEL_REASONS.some((r) => r.value === reason)) {
+    req.setFlash({ type: 'error', message: 'Pick a reason for the cancellation.' });
+    return res.redirect(back);
+  }
+  if (!['refund', 'credit'].includes(req.body.money)) {
+    req.setFlash({ type: 'error', message: 'Choose whether to refund or keep the payment as credit.' });
+    return res.redirect(back);
+  }
+  const r = await backend.cancelSession(req.viewer.id, id, {
+    reason,
+    refund: req.body.money === 'refund',
+    ...(clip(req.body.message, 500) ? { message: clip(req.body.message, 500) } : {}),
+  });
+  req.setFlash(
+    r.ok
+      ? { type: 'success', message: `Session cancelled${req.body.money === 'refund' ? ' and a full refund started' : ' — the client can rebook free'}. Both people have been notified.` }
+      : { type: 'error', message: `Not cancelled: ${r.message}` },
+  );
+  res.redirect(back);
+});
+
+router.post('/:id/reschedule', requirePerm('reschedule'), async (req, res) => {
+  const { id } = req.params;
+  const back = `/sessions/${id}#controls`;
+  // <input type="datetime-local"> has no timezone: the form says IST.
+  const local = String(req.body.start_at || '');
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) {
+    req.setFlash({ type: 'error', message: 'Pick the new date and time.' });
+    return res.redirect(back);
+  }
+  const r = await backend.rescheduleSession(req.viewer.id, id, {
+    start_at: `${local}:00+05:30`,
+    ...(clip(req.body.message, 500) ? { message: clip(req.body.message, 500) } : {}),
+  });
+  if (!r.ok) {
+    req.setFlash({ type: 'error', message: `Not rescheduled: ${r.message}` });
+    return res.redirect(back);
+  }
+  const newId = r.data && r.data.session_id;
+  req.setFlash({ type: 'success', message: `Moved to ${local.replace('T', ' ')} IST. Both people have been notified.` });
+  res.redirect(newId && newId !== id ? `/sessions/${newId}` : back);
+});
+
+router.post('/:id/complete', requirePerm('complete'), async (req, res) => {
+  const { id } = req.params;
+  const back = `/sessions/${id}#controls`;
+  const note = cleanNote(req.body.note);
+  if (note.length < MIN_NOTE) {
+    req.setFlash({ type: 'error', message: `Say why (at least ${MIN_NOTE} characters) — it goes in the audit log.` });
+    return res.redirect(back);
+  }
+  const r = await backend.completeSession(req.viewer.id, id, {
+    note,
+    pay_provider: req.body.pay_provider === 'on',
+    ...(clip(req.body.message, 500) ? { message: clip(req.body.message, 500) } : {}),
+  });
+  req.setFlash(
+    r.ok
+      ? { type: 'success', message: `Marked as completed${req.body.pay_provider === 'on' ? '; the therapist\'s share is released for payout' : '; the therapist\'s share is held'}.` }
+      : { type: 'error', message: `Not changed: ${r.message}` },
   );
   res.redirect(back);
 });
