@@ -25,6 +25,43 @@ const MAX_BATCH = 500;
  * the organization_employees row, and HR needs to be told which addresses
  * failed rather than shown a blanket success.
  */
+const WEB_URL = () => (process.env.WEB_URL || 'https://www.wheresmytherapist.com').replace(/\/$/, '');
+
+/**
+ * Two buttons, both to the website's /invite page (never the raw Supabase
+ * action_link, and never a wheresmytherapist:// link):
+ *  - the one-time token is only used when the person taps a button on that
+ *    page, so mail scanners that pre-open links no longer burn it (that was
+ *    the "Email link is invalid or has expired" error);
+ *  - custom-scheme links aren't clickable in most mail apps and do nothing
+ *    on a computer; the page hands Android phones an intent:// link that
+ *    opens the app.
+ */
+function inviteEmailHtml(email, hashedToken) {
+  const base = `${WEB_URL()}/invite?token_hash=${encodeURIComponent(hashedToken)}&type=magiclink&email=${encodeURIComponent(email)}`;
+  const btn = (href, label) =>
+    `<a href="${href}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:#4f46e5;color:#fff;text-decoration:none;font-weight:600">${label}</a>`;
+  const safeEmail = String(email).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  return `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#1f2340;max-width:560px">
+    <p>Hello,</p>
+    <p>Your employer has set you up with <strong>Where's My Therapist</strong>: private therapy sessions with licensed
+      therapists, plus the benefits of your company plan. Your account is <strong>${safeEmail}</strong>.</p>
+
+    <h3 style="margin:24px 0 4px">On a computer or any browser</h3>
+    <p style="margin:0 0 10px">Continue on the website. You'll sign in, fill in a short profile, and can book a session straight away.</p>
+    <p>${btn(base, 'Continue on the website')}</p>
+
+    <h3 style="margin:24px 0 4px">On your Android phone</h3>
+    <p style="margin:0 0 10px">Install the Where's My Therapist app first, then open this email on the same phone and tap the button.
+      The app also has the AI companion, mood check-ins and journaling.</p>
+    <p>${btn(`${base}&app=1`, 'Open in the app')}</p>
+
+    <p style="margin-top:24px;color:#5b6080;font-size:13px">This invite link works once and expires after a while. If it has
+      expired, you don't need a new one: sign in on the website or in the app with ${safeEmail} using "Continue with Google",
+      or tap "Forgot password" to set a password. Your company benefits are linked to this email.</p>
+  </div>`;
+}
+
 async function sendEmployeeInvite(email) {
   try {
     const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
@@ -61,8 +98,7 @@ async function sendEmployeeInvite(email) {
     const result = await sendMail({
       to: email,
       subject: "You're invited to Where's My Therapist",
-      html: `<p>Your employer has set you up with access to Where's My Therapist.</p>
-        <p><a href="${linkData.properties.action_link}">Click here to get started</a></p>`,
+      html: inviteEmailHtml(email, linkData.properties.hashed_token),
     });
     return result.ok ? { ok: true } : { ok: false, reason: 'mail' };
   } catch (err) {

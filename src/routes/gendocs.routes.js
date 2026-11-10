@@ -159,7 +159,9 @@ router.post('/', async (req, res) => {
     html: `<p>Hi ${escapeHtml(fullName)},</p>
       <p>Your general doctor account on Where's My Therapist is ready.</p>
       <p>Login email: <strong>${escapeHtml(email)}</strong><br/>Temporary password: <strong>${tempPassword}</strong></p>
-      <p>Open the Where's My Therapist app, sign in, set your own password and complete your profile. We'll review it and assign your organizations.</p>`,
+      <p><strong>In the app (recommended for your first sign-in):</strong> open the Where's My Therapist app, sign in, set your own password and complete your profile.</p>
+      <p><strong>On the website:</strong> sign in at <a href="${(process.env.WEB_URL || 'https://www.wheresmytherapist.com').replace(/\/$/, '')}/login">${(process.env.WEB_URL || 'https://www.wheresmytherapist.com').replace(/\/$/, '').replace(/^https?:\/\//, '')}/login</a> to manage your queue, hours and profile from a computer.</p>
+      <p>We'll review your profile and assign your organizations.</p>`,
   });
 
   req.setFlash({ type: 'success', message: `Doctor account created. Temp password (shown once): ${tempPassword}` });
